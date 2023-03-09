@@ -3,7 +3,7 @@
 Functions to get surprises around events
 """
 
-relativetoprojectdir = '/../../'
+relativetoprojectdir = '/'
 
 # preamble_macrodata:{{{
 # DO NOT CHANGE BELOW HERE!!! (until next message)

@@ -2,7 +2,7 @@
 """
 """
 
-relativetoprojectdir = '/../../'
+relativetoprojectdir = '/'
 
 # preamble_macrodata:{{{
 # DO NOT CHANGE BELOW HERE!!! (until next message)
@@ -41,10 +41,10 @@ from nelson_siegel_svensson.calibrate import calibrate_ns_ols
 import numpy as np
 import pandas as pd
 import pickle
-sys.path.append(str(__projectdir__ / Path('codegen/int-get-shocks/')))
+
 from event_shock_func import *
 
-sys.path.append(str(__projectdir__ / Path('codegen/yield-curve/')))
+sys.path.append(str(__projectdir__ / Path('submodules/yield-curve-comp/')))
 from yieldcurve_gen_func import *
 
 # Definitions:{{{1
