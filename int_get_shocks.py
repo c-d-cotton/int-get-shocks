@@ -2,38 +2,17 @@
 """
 """
 
-relativetoprojectdir = '/'
+#!/usr/bin/env python3
 
-# preamble_macrodata:{{{
-# DO NOT CHANGE BELOW HERE!!! (until next message)
 import os
 from pathlib import Path
 import sys
 
-__projectdir__ = Path(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + relativetoprojectdir))
+try:
+    __projectdir__ = Path(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + relativetoprojectdir))
+except NameError:
+    __projectdir__ = Path(os.path.abspath(""))
 
-macrodatapath_readfile = __projectdir__ / Path('../mdexternalpath.txt')
-windowspath = Path("T:/cc_ra/macrodata-external/")
-clusterpath = Path("/shared/cc_ra/macrodata-external/")
-
-if os.path.isfile(macrodatapath_readfile):
-    # first try to read macrodatapath from paths/external.txt
-    with open(macrodatapath_readfile) as f:
-        macrodatapath = f.read()
-    if macrodatapath[-1] == '\n':
-        macrodatapath = macrodatapath[: -1]
-    # if relative path, give relative to this projectdir
-    if str(macrodatapath)[0: 2] == '..':
-        macrodatapath = os.path.abspath(__projectdir__ / macrodatapath)
-    macrodatapath = Path(macrodatapath)
-elif os.path.isdir(windowspath):
-    macrodatapath = windowspath
-elif os.path.isdir(clusterpath):
-    macrodatapath = clusterpath
-else:
-    print('Warning: macrodata-external folder cannot be found. Maybe need to open T:/ drive on Windows.')
-# DO NOT CHANGE ABOVE HERE!!! (until next message)
-# preamble_macrodata:}}}
 
 import copy
 import datetime

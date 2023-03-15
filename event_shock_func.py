@@ -6,12 +6,15 @@ Functions to get surprises around events
 relativetoprojectdir = '/'
 
 # preamble_macrodata:{{{
-# DO NOT CHANGE BELOW HERE!!! (until next message)
+# DO NOT CHANGE BETWEEN the two lines beginning # preamble_macrodata
 import os
 from pathlib import Path
 import sys
 
-__projectdir__ = Path(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + relativetoprojectdir))
+try:
+    __projectdir__ = Path(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + relativetoprojectdir))
+except NameError:
+    __projectdir__ = Path(os.path.abspath(""))
 
 macrodatapath_readfile = __projectdir__ / Path('../mdexternalpath.txt')
 windowspath = Path("T:/cc_ra/macrodata-external/")
@@ -33,7 +36,7 @@ elif os.path.isdir(clusterpath):
     macrodatapath = clusterpath
 else:
     print('Warning: macrodata-external folder cannot be found. Maybe need to open T:/ drive on Windows.')
-# DO NOT CHANGE ABOVE HERE!!! (until next message)
+# DO NOT CHANGE BETWEEN the two lines beginning # preamble_macrodata
 # preamble_macrodata:}}}
 
 import datetime
@@ -279,7 +282,7 @@ def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayign
 
 
 def getdfdailyrel_single_test1():
-    dfdaily = pd.read_csv(macrodatapath / Path('process/int-stock-daily/merge/USA.csv'), index_col = 0)
+    dfdaily = pd.read_csv(macrodatapath / Path('int-stock-daily/output/merge/USA.csv'), index_col = 0)
 
     eventdays = [str(year) + '0115d' for year in range(1990, 2020)]
 
@@ -294,7 +297,7 @@ def getdfdailyrel_single_test2():
 
     Sunday September 14th was day before Lehman Brothers bankruptcy
     """
-    dfdaily = pd.read_csv(macrodatapath / Path('process/int-stock-daily/merge/AUS.csv'), index_col = 0)
+    dfdaily = pd.read_csv(macrodatapath / Path('int-stock-daily/output/merge/AUS.csv'), index_col = 0)
     # keep only Australian stock
     dfdaily = dfdaily[["aus__ref__sto__axjo"]]
 
@@ -412,7 +415,7 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
 
 
 def getdfdailyrel_reldict_test(printdetails = False):
-    df = pd.read_csv(macrodatapath / Path('process/int-stock-daily/merge/USA.csv'), index_col = 0)
+    df = pd.read_csv(macrodatapath / Path('int-stock-daily/output/merge/USA.csv'), index_col = 0)
 
     # separate df into open and closed
     openvars = [col for col in df.columns if col.split('__')[2].endswith('_op')]
@@ -487,7 +490,7 @@ def fillinminsdf(df, interval_minutes):
 
 
 def fillinminsdf_test():
-    df = pd.read_csv(macrodatapath / Path('process/int-bond-intra/temp/refinitiv_bond/ARG.csv.gz'), compression = 'gzip', index_col = 0)
+    df = pd.read_csv(macrodatapath / Path('int-bond-intra/output/merge/bond/ARG/2008.csv.gz'), compression = 'gzip', index_col = 0)
     print(df.index)
 
     df = fillinminsdf(df, 15)
@@ -648,7 +651,7 @@ def getdfintrarel_single(df, eventtimes, rpos, ffill = False, bfill = False, eve
 
 def getdfintrarel_single_test():
     # load data
-    df = pd.read_csv(macrodatapath / Path('process/int-stock-intra/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
+    df = pd.read_csv(macrodatapath / Path('int-stock-intra/output/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
 
     # fill in minutes
     df = fillinminsdf(df, 5)
@@ -780,7 +783,7 @@ def getdfintrarel_reldict_test():
 
     # get data:{{{
     # load data
-    df = pd.read_csv(macrodatapath / Path('process/int-stock-intra/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
+    df = pd.read_csv(macrodatapath / Path('int-stock-intra/output/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
 
     # fill in minutes
     df = fillinminsdf(df, 15)
@@ -807,3 +810,14 @@ def getdfintrarel_reldict_test():
     print(reldict['1h']['dfrel'])
 
 
+# Runall:{{{1
+def testall():
+    getrelativedates_test()
+    getdfdailyrel_single_test1()
+    getdfdailyrel_single_test2()
+    getdfdailyrel_reldict_test(printdetails = True)
+
+    fillinminsdf_test()
+    get_eventtimes_index_test()
+    getdfintrarel_single_test()
+    getdfintrarel_reldict_test()
