@@ -16,24 +16,24 @@ try:
 except NameError:
     __projectdir__ = Path(os.path.abspath(""))
 
-macrodatapath_readfile = __projectdir__ / Path('../mdexternalpath.txt')
+macrodataexternal_readfile = __projectdir__ / Path('../mdexternalpath.txt')
 windowspath = Path("T:/cc_ra/macrodata-external/")
 clusterpath = Path("/shared/cc_ra/macrodata-external/")
 
-if os.path.isfile(macrodatapath_readfile):
-    # first try to read macrodatapath from paths/external.txt
-    with open(macrodatapath_readfile) as f:
-        macrodatapath = f.read()
-    if macrodatapath[-1] == '\n':
-        macrodatapath = macrodatapath[: -1]
+if os.path.isfile(macrodataexternal_readfile):
+    # first try to read macrodataexternal from ../mdexternalpath.txt
+    with open(macrodataexternal_readfile) as f:
+        macrodataexternal = f.read()
+    if macrodataexternal[-1] == '\n':
+        macrodataexternal = macrodataexternal[: -1]
     # if relative path, give relative to this projectdir
-    if str(macrodatapath)[0: 2] == '..':
-        macrodatapath = os.path.abspath(__projectdir__ / macrodatapath)
-    macrodatapath = Path(macrodatapath)
+    if str(macrodataexternal)[0: 2] == '..':
+        macrodataexternal = os.path.abspath(__projectdir__ / macrodataexternal)
+    macrodataexternal = Path(macrodataexternal)
 elif os.path.isdir(windowspath):
-    macrodatapath = windowspath
+    macrodataexternal = windowspath
 elif os.path.isdir(clusterpath):
-    macrodatapath = clusterpath
+    macrodataexternal = clusterpath
 else:
     print('Warning: macrodata-external folder cannot be found. Maybe need to open T:/ drive on Windows.')
 # DO NOT CHANGE BETWEEN the two lines beginning # preamble_macrodata
@@ -282,7 +282,7 @@ def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayign
 
 
 def getdfdailyrel_single_test1():
-    dfdaily = pd.read_csv(macrodatapath / Path('int-stock-daily/output/merge/USA.csv'), index_col = 0)
+    dfdaily = pd.read_csv(macrodataexternal / Path('int-stock-daily/output/merge/USA.csv'), index_col = 0)
 
     eventdays = [str(year) + '0115d' for year in range(1990, 2020)]
 
@@ -297,7 +297,7 @@ def getdfdailyrel_single_test2():
 
     Sunday September 14th was day before Lehman Brothers bankruptcy
     """
-    dfdaily = pd.read_csv(macrodatapath / Path('int-stock-daily/output/merge/AUS.csv'), index_col = 0)
+    dfdaily = pd.read_csv(macrodataexternal / Path('int-stock-daily/output/merge/AUS.csv'), index_col = 0)
     # keep only Australian stock
     dfdaily = dfdaily[["aus__ref__sto__axjo"]]
 
@@ -415,7 +415,7 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
 
 
 def getdfdailyrel_reldict_test(printdetails = False):
-    df = pd.read_csv(macrodatapath / Path('int-stock-daily/output/merge/USA.csv'), index_col = 0)
+    df = pd.read_csv(macrodataexternal / Path('int-stock-daily/output/merge/USA.csv'), index_col = 0)
 
     # separate df into open and closed
     openvars = [col for col in df.columns if col.split('__')[2].endswith('_op')]
@@ -490,7 +490,7 @@ def fillinminsdf(df, interval_minutes):
 
 
 def fillinminsdf_test():
-    df = pd.read_csv(macrodatapath / Path('int-bond-intra/output/merge/bond/ARG/2008.csv.gz'), compression = 'gzip', index_col = 0)
+    df = pd.read_csv(macrodataexternal / Path('int-bond-intra/output/merge/bond/ARG/2008.csv.gz'), compression = 'gzip', index_col = 0)
     print(df.index)
 
     df = fillinminsdf(df, 15)
@@ -651,7 +651,7 @@ def getdfintrarel_single(df, eventtimes, rpos, ffill = False, bfill = False, eve
 
 def getdfintrarel_single_test():
     # load data
-    df = pd.read_csv(macrodatapath / Path('int-stock-intra/output/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
+    df = pd.read_csv(macrodataexternal / Path('int-stock-intra/output/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
 
     # fill in minutes
     df = fillinminsdf(df, 5)
@@ -783,7 +783,7 @@ def getdfintrarel_reldict_test():
 
     # get data:{{{
     # load data
-    df = pd.read_csv(macrodatapath / Path('int-stock-intra/output/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
+    df = pd.read_csv(macrodataexternal / Path('int-stock-intra/output/merge/USA.csv.gz'), compression = 'gzip', index_col = 0)
 
     # fill in minutes
     df = fillinminsdf(df, 15)
