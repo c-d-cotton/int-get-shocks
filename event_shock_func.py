@@ -48,7 +48,7 @@ sys.path.append(str(__projectdir__ / Path('submodules/time-index-func')))
 from time_index_func import *
 
 # Daily Data Functions:{{{1
-def getrelativedates(eventdates, rday, weekendignore = False, holidayignore = False):
+def getrelativedates(eventdates, rday, weekendignore = False, holidayignore = False, startofday = False):
     """
     Get dates relative to another set of dates.
     So if rday is -1 get the dates one day before eventdates
@@ -59,6 +59,8 @@ def getrelativedates(eventdates, rday, weekendignore = False, holidayignore = Fa
     If holidayignore = 'JPN', remove the Japanese holidays
 
     If day is an ignored day and rday == 0 then set it to be 'drop'
+
+    startofday is only used when weekendignore is True and rday is 0. Then it tells me whether to take the next day or the prior day
     """
 
     # adjust arguments:{{{
@@ -119,28 +121,20 @@ def getrelativedates(eventdates, rday, weekendignore = False, holidayignore = Fa
             if badday is False:
                 break
             else:
-                # if bad day but rday == 0 then just drop the day
-                # replace it with a clearly bad date
-                if rday == 0:
-                    dt = 'dropped'
-                    break
                 # raise counter
                 i += 1
                 if i >= 28:
                     raise ValueError('Cannot find a day that satisfies weekendignore and holidayignore.')
                 # if rday is positive then add a day otherwise subtract a day
-                if rday > 0:
+                if rday > 0 or startofday is False:
                     dt = dt + datetime.timedelta(days = 1)
-                elif rday < 0:
+                elif rday < 0 or startofday is True:
                     dt = dt - datetime.timedelta(days = 1)
                 else:
                     raise ValueError('Something has gone wrong!')
 
         # convert back to usual format
-        if dt != 'dropped':
-            mytime = convertdatetimetomytime(dt, 'd')
-        else:
-            mytime = 'dropped'
+        mytime = convertdatetimetomytime(dt, 'd')
         relativedates.append(mytime)
     # get dates:}}}
 
@@ -165,7 +159,7 @@ def getrelativedates_test():
     print('dropped = ' + getrelativedates(['20211128d'], 0, weekendignore = True)[0])
 
 
-def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayignore = False, ffill = False, bfill = False, eventtimes = None, eventtimebefore = False, eventtimeafter = False):
+def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayignore = False, ffill = False, bfill = False, eventtimes = None, eventtimebefore = False, eventtimeafter = False, startofday = False):
     """
 
     Main inputs:
@@ -194,7 +188,7 @@ def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayign
         df = df.bfill(limit = bfill)
 
     # get relativedays
-    relativedates = getrelativedates(eventdates, rday, weekendignore = weekendignore, holidayignore = holidayignore)
+    relativedates = getrelativedates(eventdates, rday, weekendignore = weekendignore, holidayignore = holidayignore, startofday = startofday)
 
 
     # get which ones are available
@@ -406,7 +400,7 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
         else:
             df = dfclose
 
-        dfrel, relativedates = getdfdailyrel_single(df, eventdates, reldict[shockname]['rday'], weekendignore = reldict[shockname]['weekendignore'], holidayignore = reldict[shockname]['holidayignore'], ffill = reldict[shockname]['ffill'], bfill = reldict[shockname]['bfill'], eventtimes = reldict[shockname]['eventtimes'], eventtimebefore = reldict[shockname]['eventtimebefore'], eventtimeafter = reldict[shockname]['eventtimeafter'])
+        dfrel, relativedates = getdfdailyrel_single(df, eventdates, reldict[shockname]['rday'], weekendignore = reldict[shockname]['weekendignore'], holidayignore = reldict[shockname]['holidayignore'], ffill = reldict[shockname]['ffill'], bfill = reldict[shockname]['bfill'], eventtimes = reldict[shockname]['eventtimes'], eventtimebefore = reldict[shockname]['eventtimebefore'], eventtimeafter = reldict[shockname]['eventtimeafter'], startofday = reldict[shockname]['open'])
 
         reldict[shockname]['dfrel'] = dfrel
         reldict[shockname]['relativedates'] = relativedates
