@@ -126,9 +126,9 @@ def getrelativedates(eventdates, rday, weekendignore = False, holidayignore = Fa
                 if i >= 28:
                     raise ValueError('Cannot find a day that satisfies weekendignore and holidayignore.')
                 # if rday is positive then add a day otherwise subtract a day
-                if rday > 0 or startofday is False:
+                if rday > 0 or (rday == 0 and startofday is False):
                     dt = dt + datetime.timedelta(days = 1)
-                elif rday < 0 or startofday is True:
+                elif rday < 0 or (rday == 0 and startofday is True):
                     dt = dt - datetime.timedelta(days = 1)
                 else:
                     raise ValueError('Something has gone wrong!')
