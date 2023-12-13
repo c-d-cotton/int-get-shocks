@@ -962,7 +962,7 @@ def forwarddiff(df, prefix, ycnamestart, ycnameend):
 
         matpart = ycnamestart.split('__')[1]
         matstartletter = matpart[0]
-        matstart = matpart[1: ]
+        matstart = int(matpart[1: ])
 
         if matstartletter in ['y', 'z']:
             None
@@ -1016,7 +1016,7 @@ def forwarddiff(df, prefix, ycnamestart, ycnameend):
 
         matpart = ycnameend.split('__')[1]
         matendletter = matpart[0]
-        matend = matpart[1: ]
+        matend = int(matpart[1: ])
 
         if matendletter in ['y', 'z']:
             None
