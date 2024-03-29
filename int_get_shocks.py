@@ -147,9 +147,11 @@ def mergezonedir(mergedir, picklefiles = False):
     for zonefile in zonefiles:
         if picklefiles is True:
             with open(mergedir / Path(zonefile), 'rb') as f:
-                dfzonelist.append( pickle.load(f) )
+                dfzone = pickle.load(f)
         else:
-            dfzonelist.append( pd.read_csv(mergedir / Path(zonefile), index_col = [0, 1]) )
+            dfzone = pd.read_csv(mergedir / Path(zonefile), index_col = [0, 1])
+
+        dfzonelist.append(dfzone)
 
     # merge verically
     df = pd.concat(dfzonelist)
@@ -190,7 +192,7 @@ def getridgemats(ridgerange):
     return(matbef, mataft)
 
 
-def getbondshocks_process(df):
+def getbondshocks_process(df, outputoutliers = False):
     """
     In this function I:
     1. Go through each befrate/aftrate combination for ycdi or each rate for yc and a) keep only good rates/maturities b) add a ranking for each observation
@@ -337,15 +339,20 @@ def getbondshocks_process(df):
         aftrates = list(df[befrate_stem + '__aftrate'])
         mats = list(df[befrate_stem + '__mat'])
         ids = list(df[befrate_stem + '__id'])
+        names = list(df[befrate_stem + '__name'])
 
         # variables I output
         befrates_noout = [np.nan] * len(befrates)
         aftrates_noout = [np.nan] * len(befrates)
         mats_noout = [np.nan] * len(befrates)
+        ids_noout = [np.nan] * len(befrates)
+        names_noout = [np.nan] * len(befrates)
         # record of outliers to check what I dropped
         befrate_outliers = [np.nan] * len(befrates)
         aftrate_outliers = [np.nan] * len(befrates)
         mat_outliers = [np.nan] * len(befrates)
+        id_outliers = [np.nan] * len(befrates)
+        name_outliers = [np.nan] * len(befrates)
 
         # now go through and replace rates/maturities accordingly
         for i in range(len(befrates)):
@@ -356,12 +363,20 @@ def getbondshocks_process(df):
                 continue
             if pd.isnull(mats[i]) is True:
                 raise ValueError("befrates and aftrates are not nan but mats is nan. Stem: " + befrate_stem + ".")
+            if pd.isnull(ids[i]) is True:
+                raise ValueError("befrates and aftrates are not nan but ids is nan. Stem: " + befrate_stem + ".")
+            if pd.isnull(names[i]) is True:
+                raise ValueError("befrates and aftrates are not nan but names is nan. Stem: " + befrate_stem + ".")
 
             # verify befrates, aftrates, mats have same length
             if len(befrates[i]) != len(aftrates[i]):
                 raise ValueError('befrates should have the same length as aftrates. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. aftrates: ' + str(aftrates[i]) + '.')
             if len(befrates[i]) != len(mats[i]):
                 raise ValueError('befrates should have the same length as mats. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. mats: ' + str(mats[i]) + '.')
+            if len(befrates[i]) != len(ids[i]):
+                raise ValueError('befrates should have the same length as ids. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. ids: ' + str(ids[i]) + '.')
+            if len(befrates[i]) != len(names[i]):
+                raise ValueError('befrates should have the same length as names. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. names: ' + str(names[i]) + '.')
 
             # remove elements which are not defined for both befrates and aftrates
             keepj = []
@@ -389,18 +404,24 @@ def getbondshocks_process(df):
             befrates[i] = [befrates[i][j] for j in keepj]
             aftrates[i] = [aftrates[i][j] for j in keepj]
             mats[i] = [mats[i][j] for j in keepj]
+            ids[i] = [ids[i][j] for j in keepj]
+            names[i] = [names[i][j] for j in keepj]
 
             # sort by mats
             matsorder = np.argsort(mats[i])
             befrates[i] = [befrates[i][j] for j in list(matsorder)]
             aftrates[i] = [aftrates[i][j] for j in list(matsorder)]
             mats[i] = [mats[i][j] for j in list(matsorder)]
+            ids[i] = [ids[i][j] for j in list(matsorder)]
+            names[i] = [names[i][j] for j in list(matsorder)]
             # general process:}}}
 
             # define variable without outlier
             befrates_noout[i] = befrates[i]
             aftrates_noout[i] = aftrates[i]
             mats_noout[i] = mats[i]
+            ids_noout[i] = ids[i]
+            names_noout[i] = names[i]
 
             # drop i,j if it is an outlier:{{{
             # drop outliers by comparing change in before and after for different maturities
@@ -417,11 +438,15 @@ def getbondshocks_process(df):
                     thischange = aftrates_noout[i][j] - befrates_noout[i][j]
 
                     if len(befrates_noout[i]) < 2:
-                        # can't get a comparison so just set the change to be the minimum
-                        # so any mild outlier will get dropped in this case
-                        # not that it really matters since we can't construct a yield curve here anyway
+                        # can't get a comparison so just keep if:
+                        # level satisfies >=-2 and <= 10
+                        # changes is not large
                         comparison = 5
                         comparisonchange = 0
+                        if befrates_noout[i][j] < -2 or befrates_noout[i][j] > 10 or abs(thischange) > 0.2:
+                            isoutlier = True
+                        else:
+                            isoutlier = False
                     else:
                         # compute change for interest rates around j
                         # allows me to compare whether or not j is out of the ordinary
@@ -438,33 +463,34 @@ def getbondshocks_process(df):
                             comparison = 0.5 * (befrates_noout[i][j - 1] + befrates_noout[i][j + 1])
                             comparisonchange = 0.5 * (aftrates_noout[i][j - 1] - befrates_noout[i][j - 1] + aftrates_noout[i][j + 1] - befrates_noout[i][j + 1])
 
-                    if abs(befrates_noout[i][j] - comparison) > 5 or abs(aftrates_noout[i][j] - comparison) > 5 or abs(thischange) > 1:
-                        # first check if numbers are very different from nearby numbers
-                        # this can sometimes happen if the bond price is mistaken for the bond yield in which case one bond can have a "yield" of 100 rather than 1
-                        # also remove if a large change
-                        isoutlier = True
-                    elif abs(thischange) < 0.2:
-                        # else if change is small then not an outlier
-                        isoutlier = False
-                    elif np.sign(thischange) != np.sign(comparisonchange):
-                        # if thischange is positive while comparisonchange is negative probably an outlier
-                        isoutlier = True
-                    elif abs(thischange) < 0.3:
-                        # if only a small outlier then only remove is difference from comparisonchange very large
-                        if abs(thischange) < 4 * abs(comparisonchange):
-                            isoutlier = False
-                        else:
+                        # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
+                        if abs(befrates_noout[i][j] - comparison) > 5 or abs(aftrates_noout[i][j] - comparison) > 5 or abs(thischange) > 1:
+                            # first check if numbers are very different from nearby numbers
+                            # this can sometimes happen if the bond price is mistaken for the bond yield in which case one bond can have a "yield" of 100 rather than 1
+                            # also remove if a large change
                             isoutlier = True
-                    elif abs(thischange) < 0.4:
-                        if abs(thischange) < 3 * abs(comparisonchange):
+                        elif abs(thischange) < 0.2:
+                            # else if change is small then not an outlier
                             isoutlier = False
-                        else:
+                        elif np.sign(thischange) != np.sign(comparisonchange):
+                            # if thischange is positive while comparisonchange is negative probably an outlier
                             isoutlier = True
-                    else:
-                        if abs(thischange) < 2 * abs(comparisonchange):
-                            isoutlier = False
+                        elif abs(thischange) < 0.3:
+                            # if only a small outlier then only remove is difference from comparisonchange very large
+                            if abs(thischange) < 4 * abs(comparisonchange):
+                                isoutlier = False
+                            else:
+                                isoutlier = True
+                        elif abs(thischange) < 0.4:
+                            if abs(thischange) < 3 * abs(comparisonchange):
+                                isoutlier = False
+                            else:
+                                isoutlier = True
                         else:
-                            isoutlier = True
+                            if abs(thischange) < 2 * abs(comparisonchange):
+                                isoutlier = False
+                            else:
+                                isoutlier = True
                     
                     if isoutlier is False:
                         keepj.append(j)
@@ -473,12 +499,16 @@ def getbondshocks_process(df):
                 befrates_noout[i] = [befrates_noout[i][j] for j in keepj]
                 aftrates_noout[i] = [aftrates_noout[i][j] for j in keepj]
                 mats_noout[i] = [mats_noout[i][j] for j in keepj]
+                ids_noout[i] = [ids_noout[i][j] for j in keepj]
+                names_noout[i] = [names_noout[i][j] for j in keepj]
 
             # define outlier variables
             if len(befrates_noout[i]) != len(befrates[i]):
                 befrate_outliers[i] = befrates[i]
                 aftrate_outliers[i] = aftrates[i]
                 mat_outliers[i] = mats[i]
+                id_outliers[i] = ids[i]
+                name_outliers[i] = names[i]
 
             # drop i,j if it is an outlier:}}}
 
@@ -487,15 +517,22 @@ def getbondshocks_process(df):
                 befrates_noout[i] = np.nan
                 aftrates_noout[i] = np.nan
                 mats_noout[i] = np.nan
+                ids_noout[i] = np.nan
+                names_noout[i] = np.nan
 
         dfallso[befrate_stem + '__befrate'] = befrates_noout
         dfallso[befrate_stem + '__aftrate'] = aftrates_noout
         dfallso[befrate_stem + '__mat'] = mats_noout
+        dfallso[befrate_stem + '__id'] = ids_noout
+        dfallso[befrate_stem + '__name'] = names_noout
 
-        # this allows me to see what my outlier rule is excluding
-        dfallso[befrate_stem + '__befrate__outlier'] = befrate_outliers
-        dfallso[befrate_stem + '__aftrate_outlier'] = aftrate_outliers
-        dfallso[befrate_stem + '__mat__outlier'] = mat_outliers
+        if outputoutliers is True:
+            # this allows me to see what my outlier rule is excluding
+            dfallso[befrate_stem + '__befrate__outlier'] = befrate_outliers
+            dfallso[befrate_stem + '__aftrate_outlier'] = aftrate_outliers
+            dfallso[befrate_stem + '__mat__outlier'] = mat_outliers
+            dfallso[befrate_stem + '__id__outlier'] = id_outliers
+            dfallso[befrate_stem + '__name__outlier'] = name_outliers
             
     # go through befrates/aftrates:}}}
 
@@ -576,7 +613,7 @@ def getbondshocks_process(df):
         # get version of stem without source
         # i.e. something like ref__ycdi__m1c_1c__rate
         stemnosource = '__'.join(stem.split('__')[1: ])
-        source = stem.split('__')[0]
+        source = '__'.join(stem.split('__')[: 1])
 
         if stemnosource + '__mat' not in df1so:
             # if variable without source defined then just take this as the variable
@@ -640,6 +677,7 @@ def getbondshocks_yc_allso(dfallso, ycnames = None):
     """
     if ycnames is None:
         return(None)
+
 
     # verify no bad ycnames
     badycnames = set(ycnames) - {ycname for ycname in ycnames if ycname.startswith('ridgeall__')}
@@ -712,6 +750,8 @@ def getbondshocks_yc_allso(dfallso, ycnames = None):
             dfyc[colname.replace('__befrate__', '__di__')] = dfyc[colname.replace('__befrate__', '__aftrate__')] - dfyc[colname]
 
     # add di:}}}
+
+    dfyc = dfyc.sort_index(axis = 1)
 
     return(dfyc)
 
@@ -913,6 +953,118 @@ def getbondshocks_yc_1so(df1so, ycnames = None, printdetails = False):
     return(dfyc)
 
 
+def getindividualbonds(df):
+    """
+    Convert and unprocessed or processed (with all sources) data frame back to individual bonds
+    Rather than lists
+    """
+
+    # get list of rates to process/rank:{{{
+    rate_stems = [col[: -6] for col in df.columns if col.endswith('__rate')]
+    befrate_stems = [col[: -9] for col in df.columns if col.endswith('__befrate')]
+    aftrate_stems = [col[: -9] for col in df.columns if col.endswith('__aftrate')]
+
+    # verify befrates and aftrates match
+    if befrate_stems != aftrate_stems:
+        raise ValueError('befrate_stems and aftrate_stems should match.')
+    # verify no intersection between rate_stems and befrate_stems
+    if len(set(rate_stems) & set(befrate_stems)) > 0:
+        raise ValueError("rate_stems and befrate_stems have intersecting components: " + str(set(rate_stems) & set(befrate_stems)) + ".")
+    # get list of rates to process/rank:}}}
+
+    # go through rates:{{{
+    stemstoconcat = []
+    for rate_stem in rate_stems:
+        rates = list(df[rate_stem + '__rate'])
+        mats = list(df[rate_stem + '__mat'])
+        ids = list(df[rate_stem + '__id'])
+        names = list(df[rate_stem + '__name'])
+
+        rowstoconcat = []
+
+        # now go through and replace rates/maturities accordingly
+        for i in range(len(rates)):
+            outdict = {}
+            
+            # stop if nan
+            if isinstance(rates[i], list) is False and pd.isnull(rates[i]) is True:
+                # add empty row with no columns
+                rowstoconcat.append(pd.DataFrame(index = [0]))
+                continue
+
+            if isinstance(rates[i], list) is True and len(rates[i]) == 0:
+                # add empty row with no columns
+                rowstoconcat.append(pd.DataFrame(index = [0]))
+                continue
+
+            for j in range(len(rates[i])):
+            
+                outdict[rate_stem + '__' + names[i][j] + '__rate'] = [rates[i][j]]
+                outdict[rate_stem + '__' + names[i][j] + '__mat'] = [mats[i][j]]
+                outdict[rate_stem + '__' + names[i][j] + '__id'] = [ids[i][j]]
+
+            dfrow = pd.DataFrame(outdict)
+            rowstoconcat.append(dfrow)
+
+        dfstem = pd.concat(rowstoconcat)
+        dfstem.index = df.index
+
+        stemstoconcat.append(dfstem)
+
+    df2 = pd.concat(stemstoconcat, axis = 1)
+
+    df2 = df2.sort_index(axis = 1)
+    # go through rates:}}}
+
+    # go through befrates/aftrates:{{{
+    stemstoconcat = []
+    for befrate_stem in befrate_stems:
+        befrates = list(df[befrate_stem + '__befrate'])
+        aftrates = list(df[befrate_stem + '__aftrate'])
+        mats = list(df[befrate_stem + '__mat'])
+        ids = list(df[befrate_stem + '__id'])
+        names = list(df[befrate_stem + '__name'])
+
+        rowstoconcat = []
+
+        # now go through and replace rates/maturities accordingly
+        for i in range(len(befrates)):
+            outdict = {}
+            
+            # stop if nan
+            if isinstance(befrates[i], list) is False and pd.isnull(befrates[i]) is True:
+                # add empty row with no columns
+                rowstoconcat.append(pd.DataFrame(index = [0]))
+                continue
+
+            if isinstance(befrates[i], list) is True and len(befrates[i]) == 0:
+                # add empty row with no columns
+                rowstoconcat.append(pd.DataFrame(index = [0]))
+                continue
+
+            for j in range(len(befrates[i])):
+            
+                outdict[befrate_stem + '__' + names[i][j] + '__befrate'] = [befrates[i][j]]
+                outdict[befrate_stem + '__' + names[i][j] + '__aftrate'] = [aftrates[i][j]]
+                outdict[befrate_stem + '__' + names[i][j] + '__mat'] = [mats[i][j]]
+                outdict[befrate_stem + '__' + names[i][j] + '__id'] = [ids[i][j]]
+
+            dfrow = pd.DataFrame(outdict)
+            rowstoconcat.append(dfrow)
+
+        dfstem = pd.concat(rowstoconcat)
+        dfstem.index = df.index
+
+        stemstoconcat.append(dfstem)
+
+    df2 = pd.concat(stemstoconcat, axis = 1)
+
+    df2 = df2.sort_index(axis = 1)
+    # go through befrates/aftrates:}}}
+
+    return(df2)
+
+    
 def forwarddiff(df, prefix, ycnamestart, ycnameend):
     """
     Structure of difference variable
