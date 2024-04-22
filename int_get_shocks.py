@@ -1011,9 +1011,8 @@ def getindividualbonds(df):
 
         stemstoconcat.append(dfstem)
 
-    df2 = pd.concat(stemstoconcat, axis = 1)
-
-    df2 = df2.sort_index(axis = 1)
+    if len(stemstoconcat) > 0:
+        df2 = pd.concat(stemstoconcat, axis = 1)
     # go through rates:}}}
 
     # go through befrates/aftrates:{{{
@@ -1057,10 +1056,11 @@ def getindividualbonds(df):
 
         stemstoconcat.append(dfstem)
 
-    df2 = pd.concat(stemstoconcat, axis = 1)
+    if len(stemstoconcat) > 0:
+        df2 = pd.concat(stemstoconcat, axis = 1)
+    # go through befrates/aftrates:}}}
 
     df2 = df2.sort_index(axis = 1)
-    # go through befrates/aftrates:}}}
 
     return(df2)
 
