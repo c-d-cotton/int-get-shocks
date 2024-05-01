@@ -224,13 +224,18 @@ def getbondshocks_process(df, outputoutliers = False):
         rates = list(df[rate_stem + '__rate'])
         mats = list(df[rate_stem + '__mat'])
         ids = list(df[rate_stem + '__id'])
+        names = list(df[rate_stem + '__name'])
 
         # where I store the new rates
         rates_noout = [np.nan] * len(rates)
         mats_noout = [np.nan] * len(rates)
+        ids_noout = [np.nan] * len(rates)
+        names_noout = [np.nan] * len(rates)
         # where I store a record of the outliers
         rate_outliers = [np.nan] * len(rates)
         mat_outliers = [np.nan] * len(rates)
+        id_outliers = [np.nan] * len(rates)
+        name_outliers = [np.nan] * len(rates)
 
         # now go through and replace rates/maturities accordingly
         for i in range(len(rates)):
@@ -244,6 +249,10 @@ def getbondshocks_process(df, outputoutliers = False):
             
             if len(rates[i]) != len(mats[i]):
                 raise ValueError('rates should have the same length as mats. stem: ' + rate_stem + '. rates: ' + str(rates[i]) + '. mats: ' + str(mats[i]) + '.')
+            if len(rates[i]) != len(ids[i]):
+                raise ValueError('rates should have the same length as ids. stem: ' + rate_stem + '. rates: ' + str(rates[i]) + '. ids: ' + str(ids[i]) + '.')
+            if len(rates[i]) != len(names[i]):
+                raise ValueError('rates should have the same length as names. stem: ' + rate_stem + '. rates: ' + str(rates[i]) + '. ids: ' + str(names[i]) + '.')
 
             keepj = []
             observedids = []
@@ -258,16 +267,22 @@ def getbondshocks_process(df, outputoutliers = False):
             # keep only good rates
             rates[i] = [rates[i][j] for j in keepj]
             mats[i] = [mats[i][j] for j in keepj]
+            ids[i] = [ids[i][j] for j in keepj]
+            names[i] = [names[i][j] for j in keepj]
 
             # sort by mats
             matsorder = np.argsort(mats[i])
             rates[i] = [rates[i][j] for j in list(matsorder)]
             mats[i] = [mats[i][j] for j in list(matsorder)]
+            ids[i] = [ids[i][j] for j in list(matsorder)]
+            names[i] = [names[i][j] for j in list(matsorder)]
             # general process:}}}
 
             # define no outlier variables
             rates_noout[i] = rates[i]
             mats_noout[i] = mats[i]
+            ids_noout[i] = ids[i]
+            names_noout[i] = names[i]
 
             # drop i,j if it is an outlier:{{{
             # need to remove null values beforehand so can compute comparisonchange
@@ -310,11 +325,15 @@ def getbondshocks_process(df, outputoutliers = False):
                 # only keep non-outliers
                 rates_noout[i] = [rates_noout[i][j] for j in keepj]
                 mats_noout[i] = [mats_noout[i][j] for j in keepj]
+                ids_noout[i] = [ids_noout[i][j] for j in keepj]
+                names_noout[i] = [names_noout[i][j] for j in keepj]
 
             # get record of outliers
             if pd.isnull(rates_noout[i]) is not True and len(rates_noout[i]) != len(rates[i]):
                 rate_outliers[i] = rates[i]
                 mat_outliers[i] = mats[i]
+                id_outliers[i] = ids[i]
+                name_outliers[i] = names[i]
 
             # drop i,j if it is an outlier:}}}
 
@@ -322,14 +341,20 @@ def getbondshocks_process(df, outputoutliers = False):
             if len(mats_noout[i]) == 0:
                 rates_noout[i] = np.nan
                 mats_noout[i] = np.nan
+                ids_noout[i] = np.nan
+                names_noout[i] = np.nan
 
         # update variables
         dfallso[rate_stem + '__rate'] = rates_noout
         dfallso[rate_stem + '__mat'] = mats_noout
+        dfallso[rate_stem + '__id'] = ids_noout
+        dfallso[rate_stem + '__name'] = names_noout
 
         # this allows me to see what my outlier rule is excluding
         dfallso[rate_stem + '__rate__outlier'] = rate_outliers
         dfallso[rate_stem + '__mat__outlier'] = mat_outliers
+        dfallso[rate_stem + '__id__outlier'] = id_outliers
+        dfallso[rate_stem + '__name__outlier'] = name_outliers
 
     # go through rates:}}}
 
