@@ -134,7 +134,7 @@ def getdatedictfromdf(df, datevar, dropna = True):
 
 
 # Merge Functions:{{{1
-def mergezonedir(mergedir, picklefiles = False):
+def mergezonedir(mergedir, picklefiles = False, includeonlyprefix = None):
     zonefiles = os.listdir(mergedir)
     if picklefiles is True:
         zonefiles = [zonefile for zonefile in zonefiles if zonefile.endswith('.pickle')]
@@ -150,6 +150,9 @@ def mergezonedir(mergedir, picklefiles = False):
                 dfzone = pickle.load(f)
         else:
             dfzone = pd.read_csv(mergedir / Path(zonefile), index_col = [0, 1])
+
+        if includeonlyprefix is not None:
+            dfzone = dfzone[[col for col in dfzone.columns if col.startswith(includeonlyprefix)]]
 
         dfzonelist.append(dfzone)
 
