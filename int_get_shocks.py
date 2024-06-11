@@ -23,6 +23,9 @@ import pickle
 
 from event_shock_func import *
 
+# turn off annoying warning (DataFrame is highly fragmented...)
+simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
+
 sys.path.append(str(__projectdir__ / Path('submodules/yield-curve-comp/')))
 from yieldcurve_gen_func import *
 
@@ -974,11 +977,7 @@ def getbondshocks_yc_1so(df1so, ycnames = None, printdetails = False):
 
         for ycname in ycnames:
             colname = col + '__' + ycname
-            # turn off annoying warning temporarily
-            simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
             dfyc[colname.replace('__befrate__', '__di__')] = dfyc[colname.replace('__befrate__', '__aftrate__')] - dfyc[colname]
-            # turn back on warning
-            simplefilter(action="default", category=pd.errors.PerformanceWarning)
 
     # add di:}}}
 
