@@ -6,6 +6,7 @@
 import os
 from pathlib import Path
 import sys
+from warnings import simplefilter
 
 try:
     __projectdir__ = Path(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + '/'))
@@ -974,7 +975,11 @@ def getbondshocks_yc_1so(df1so, ycnames = None, printdetails = False):
 
         for ycname in ycnames:
             colname = col + '__' + ycname
+            # turn off annoying warning temporarily
+            simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
             dfyc[colname.replace('__befrate__', '__di__')] = dfyc[colname.replace('__befrate__', '__aftrate__')] - dfyc[colname]
+            # turn back on warning
+            simplefilter(action="default", category=pd.errors.PerformanceWarning)
 
     # add di:}}}
 
