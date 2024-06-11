@@ -717,7 +717,6 @@ def getbondshocks_yc_allso(dfallso, ycnames = None):
 
     dfyc = pd.DataFrame(index = dfallso.index)
 
-    ridgemats = list(range(1, 31))
     for col in ratestodo:
         # get stem
         stem = '__'.join(col.split('__')[: -1])
@@ -740,7 +739,7 @@ def getbondshocks_yc_allso(dfallso, ycnames = None):
             if colnosource + '__' + ridgename not in dfyc:
                 ridges = [np.nan for i in range(len(rates))]
             else:
-                ridges = dfyc[colnosource + '__' + ridgename]
+                ridges = dfyc[colnosource + '__' + ridgename].to_list()
 
             for i in range(len(rates)):
                 if pd.isnull(rates[i]) is True:
