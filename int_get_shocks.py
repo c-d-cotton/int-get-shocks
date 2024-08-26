@@ -53,6 +53,7 @@ shockdict_daily_extended["m1c_1c"] = ["m1c", "1c"]
 shockdict_daily_extended["m1c_1o"] = ["m1c", "1o"]
 shockdict_daily_extended["m1o_1o"] = ["m1o", "1o"]
 shockdict_daily_extended["m90c_m1c"] = ["m90c_f7", "m1c_f7"]
+shockdict_daily_extended["m1c_m1c"] = ["m1c_f7", "m1c_f7"]
 
 # Reldict Return Daily:{{{2
 reldictreturn_daily_extended = {'m1c': 'm1c_f7'}
@@ -186,6 +187,53 @@ def getsinglemat(mat):
     return(mat)
 
 
+def getranking(mats):
+    """
+    Get ranking of a list of maturities for bonds
+    """
+
+    # exclude maturities over 15 years when doing source ranking
+    mats_max15 = [mat for mat in mats if mat <= 15]
+
+    if len(mats_max15) > 0:
+        minmats = min(mats_max15)
+        maxmats = max(mats_max15)
+        between_3_7 = [mat for mat in mats_max15 if mat > 3 and mat < 7]
+    else:
+        minmats = None
+        maxmats = None
+        between_3_7 = []
+
+    # give ranking where 1 is higher than 0 in goodness
+    if len(mats_max15) == 0:
+        # need to do this case first since when mats == [], minmats and maxmats are undefined
+        matsrank = '0'
+    elif len(mats_max15) >= 10 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
+        matsrank = '6'
+    elif len(mats_max15) >= 8 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
+        matsrank = '5'
+    elif len(mats_max15) >= 6 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
+        matsrank = '4'
+    elif len(mats_max15) >= 5 and minmats <= 3 and maxmats >= 7:
+        matsrank = '3'
+    elif len(mats_max15) >= 4 and minmats <= 5 and maxmats >= 5:
+        matsrank = '2'
+    elif len(mats_max15) >= 4:
+        matsrank = '1'
+    else:
+        matsrank = '0'
+
+    # get second matsrank simply based on the number of maturities available
+    # this only matters if the original matsrank and the sourcerank are the same
+    if len(mats_max15) > 9999:
+        raise ValueError('matsrank2 will not work properly since too many maturities available.')
+    matsrank2 = str(len(mats_max15)).zfill(4)
+
+    overallrank = int(matsrank + matsrank2)
+
+    return(overallrank)
+
+
 def getridgemats(ridgerange):
     """
     ridgerange should be something like y01_y03 or m01_m04
@@ -199,7 +247,7 @@ def getridgemats(ridgerange):
     return(matbef, mataft)
 
 
-def getbondshocks_process(df, outputoutliers = False):
+def getbondshocks_process(df):
     """
     In this function I:
     1. Go through each befrate/aftrate combination for ycdi or each rate for yc and a) keep only good rates/maturities b) add a ranking for each observation
@@ -210,234 +258,103 @@ def getbondshocks_process(df, outputoutliers = False):
     And then these are aggregated up into a single variable
     """
 
-    # get list of rates to process/rank:{{{
-    rate_stems = [col[: -6] for col in df.columns if col.endswith('__rate')]
-    befrate_stems = [col[: -9] for col in df.columns if col.endswith('__befrate')]
-    aftrate_stems = [col[: -9] for col in df.columns if col.endswith('__aftrate')]
+    dfout = pd.DataFrame(index = df.index)
 
-    # verify befrates and aftrates match
-    if befrate_stems != aftrate_stems:
-        raise ValueError('befrate_stems and aftrate_stems should match.')
-    # verify no intersection between rate_stems and befrate_stems
-    if len(set(rate_stems) & set(befrate_stems)) > 0:
-        raise ValueError("rate_stems and befrate_stems have intersecting components: " + str(set(rate_stems) & set(befrate_stems)) + ".")
-    # get list of rates to process/rank:}}}
+    # merge columns together to get iout:{{{
+    prefixes = sorted(list(set(['__'.join(col.split('__')[: -1]) for col in df.columns])))
+    for prefix in prefixes:
+        # prefix is something like z_deu_ref__ycdi__m1c_1c
+        befrates = list(df[prefix + '__befrate'])
+        aftrates = list(df[prefix + '__aftrate'])
+        ids = list(df[prefix + '__id'])
+        mats = list(df[prefix + '__mat'])
+        names = list(df[prefix + '__name'])
 
-    # go through rates:{{{
-    # create new dataframe to output all sources to (so don't include unneeded variables)
-    dfallso = pd.DataFrame(index = df.index)
+        # break up prefix into two parts
+        # z_deu_ref
+        prefix_source = prefix.split('__')[0]
+        # ycdi__m1c_1c
+        prefix_nonsource = '__'.join(prefix.split('__')[1: ])
 
-    for rate_stem in rate_stems:
-        rates = list(df[rate_stem + '__rate'])
-        mats = list(df[rate_stem + '__mat'])
-        ids = list(df[rate_stem + '__id'])
-        names = list(df[rate_stem + '__name'])
+        if 'iout__' + prefix_nonsource in dfout.columns:
+            # need to add this source to existing lists
+            befrates_out = list(dfout['iout__' + prefix_nonsource + '__befrate'])
+            aftrates_out = list(dfout['iout__' + prefix_nonsource + '__aftrate'])
+            ids_out = list(dfout['iout__' + prefix_nonsource + '__id'])
+            mats_out = list(dfout['iout__' + prefix_nonsource + '__mat'])
+            names_out = list(dfout['iout__' + prefix_nonsource + '__name'])
+            sources_out = list(dfout['iout__' + prefix_nonsource + '__source'])
+        else:
+            # create new lists
+            befrates_out = [[] for i in range(len(dfout))]
+            aftrates_out = [[] for i in range(len(dfout))]
+            ids_out = [[] for i in range(len(dfout))]
+            mats_out = [[] for i in range(len(dfout))]
+            names_out = [[] for i in range(len(dfout))]
+            sources_out = [[] for i in range(len(dfout))]
 
-        # where I store the new rates
-        rates_noout = [np.nan] * len(rates)
-        mats_noout = [np.nan] * len(rates)
-        ids_noout = [np.nan] * len(rates)
-        names_noout = [np.nan] * len(rates)
-        # where I store a record of the outliers
-        rate_outliers = [np.nan] * len(rates)
-        mat_outliers = [np.nan] * len(rates)
-        id_outliers = [np.nan] * len(rates)
-        name_outliers = [np.nan] * len(rates)
+        # append to lists if befrate and aftrate are defined and not strings i.e. not "badindex"
+        for i in range(len(befrates)):
+            for j in range(len(befrates[i])):
+                if pd.notnull(befrates[i][j]) and pd.notnull(aftrates[i][j]) and isinstance(befrates[i][j], str) is False and isinstance(aftrates[i][j], str) is False:
+                    befrates_out[i] = befrates_out[i] + [befrates[i][j]]
+                    aftrates_out[i] = aftrates_out[i] + [aftrates[i][j]]
+                    ids_out[i] = ids_out[i] + [ids[i][j]]
+                    mats_out[i] = mats_out[i] + [mats[i][j]]
+                    names_out[i] = names_out[i] + [names[i][j]]
+                    sources_out[i] = sources_out[i] + [prefix_source]
 
-        # now go through and replace rates/maturities accordingly
-        for i in range(len(rates)):
-            
-            # general process:{{{
-            # stop if nan
-            if pd.isnull(rates[i]) is True:
-                continue
-            if pd.isnull(mats[i]) is True:
-                raise ValueError("Weird case where rates[i] exists but mats[i] does not exist. For stem: " + rate_stem + ".")
-            
-            if len(rates[i]) != len(mats[i]):
-                raise ValueError('rates should have the same length as mats. stem: ' + rate_stem + '. rates: ' + str(rates[i]) + '. mats: ' + str(mats[i]) + '.')
-            if len(rates[i]) != len(ids[i]):
-                raise ValueError('rates should have the same length as ids. stem: ' + rate_stem + '. rates: ' + str(rates[i]) + '. ids: ' + str(ids[i]) + '.')
-            if len(rates[i]) != len(names[i]):
-                raise ValueError('rates should have the same length as names. stem: ' + rate_stem + '. rates: ' + str(rates[i]) + '. ids: ' + str(names[i]) + '.')
+        dfout['iout__' + prefix_nonsource + '__befrate'] = befrates_out
+        dfout['iout__' + prefix_nonsource + '__aftrate'] = aftrates_out
+        dfout['iout__' + prefix_nonsource + '__id'] = ids_out
+        dfout['iout__' + prefix_nonsource + '__mat'] = mats_out
+        dfout['iout__' + prefix_nonsource + '__name'] = names_out
+        dfout['iout__' + prefix_nonsource + '__source'] = sources_out
+        
+    # merge columns together to get iout:}}}
 
-            keepj = []
-            observedids = []
-            for j in range(len(rates[i])):
-                if pd.isnull(rates[i][j]) is True or isinstance(rates[i][j], str) is True or (pd.isnull(ids[i][j]) is False and ids[i][j] in observedids):
-                    None
-                else:
-                    keepj.append(j)
-                    # keep record of ids observed for this yield curve and drop next time observe
-                    observedids.append(ids[i][j])
-
-            # keep only good rates
-            rates[i] = [rates[i][j] for j in keepj]
-            mats[i] = [mats[i][j] for j in keepj]
-            ids[i] = [ids[i][j] for j in keepj]
-            names[i] = [names[i][j] for j in keepj]
-
-            # sort by mats
-            matsorder = np.argsort(mats[i])
-            rates[i] = [rates[i][j] for j in list(matsorder)]
-            mats[i] = [mats[i][j] for j in list(matsorder)]
-            ids[i] = [ids[i][j] for j in list(matsorder)]
-            names[i] = [names[i][j] for j in list(matsorder)]
-            # general process:}}}
-
-            # define no outlier variables
-            rates_noout[i] = rates[i]
-            mats_noout[i] = mats[i]
-            ids_noout[i] = ids[i]
-            names_noout[i] = names[i]
-
-            # drop i,j if it is an outlier:{{{
-            # need to remove null values beforehand so can compute comparisonchange
-            # repeat until no additional outliers found
-            oldlen = None
-            while len(rates_noout[i]) != oldlen:
-                # record what old length was to verify no more changes made
-                oldlen = len(rates_noout[i])
-
-                keepj = []
-                for j in range(len(rates_noout[i])):
-
-                    if len(rates_noout[i]) < 2:
-                        # just set comparison value to be 5 if only one value
-                        comparison = 3
-                    else:
-                        # compute change for interest rates_noout around j
-                        # allows me to compare whether or not j is out of the ordinary
-                        if j == 0:
-                            # if first point compare to change for second point
-                            comparison = rates_noout[i][1]
-                        elif j == len(rates_noout[i]) - 1:
-                            # if last point compare to change for penultimate point
-                            comparison = rates_noout[i][j - 1]
-                        else:
-                            # if middle point compare to change for points before and after
-                            comparison = 0.5 * (rates_noout[i][j - 1] + rates_noout[i][j + 1])
-
-                    if abs(rates_noout[i][j] - comparison) > 5:
-                        # first check if numbers are very different from nearby numbers
-                        # this can sometimes happen if the bond price is mistaken for the bond yield in which case one bond can have a "yield" of 100 rather than 1
-                        # also remove if a large change
-                        isoutlier = True
-                    else:
-                        isoutlier = False
-                    
-                    if isoutlier is False:
-                        keepj.append(j)
-
-                # only keep non-outliers
-                rates_noout[i] = [rates_noout[i][j] for j in keepj]
-                mats_noout[i] = [mats_noout[i][j] for j in keepj]
-                ids_noout[i] = [ids_noout[i][j] for j in keepj]
-                names_noout[i] = [names_noout[i][j] for j in keepj]
-
-            # get record of outliers
-            if pd.isnull(rates_noout[i]) is not True and len(rates_noout[i]) != len(rates[i]):
-                rate_outliers[i] = rates[i]
-                mat_outliers[i] = mats[i]
-                id_outliers[i] = ids[i]
-                name_outliers[i] = names[i]
-
-            # drop i,j if it is an outlier:}}}
-
-            # replace with na if []
-            if len(mats_noout[i]) == 0:
-                rates_noout[i] = np.nan
-                mats_noout[i] = np.nan
-                ids_noout[i] = np.nan
-                names_noout[i] = np.nan
-
-        # update variables
-        dfallso[rate_stem + '__rate'] = rates_noout
-        dfallso[rate_stem + '__mat'] = mats_noout
-        dfallso[rate_stem + '__id'] = ids_noout
-        dfallso[rate_stem + '__name'] = names_noout
-
-        # this allows me to see what my outlier rule is excluding
-        dfallso[rate_stem + '__rate__outlier'] = rate_outliers
-        dfallso[rate_stem + '__mat__outlier'] = mat_outliers
-        dfallso[rate_stem + '__id__outlier'] = id_outliers
-        dfallso[rate_stem + '__name__outlier'] = name_outliers
-
-    # go through rates:}}}
-
-    # go through befrates/aftrates:{{{
-    for befrate_stem in befrate_stems:
-        befrates = list(df[befrate_stem + '__befrate'])
-        aftrates = list(df[befrate_stem + '__aftrate'])
-        mats = list(df[befrate_stem + '__mat'])
-        ids = list(df[befrate_stem + '__id'])
-        names = list(df[befrate_stem + '__name'])
-
-        # variables I output
-        befrates_noout = [np.nan] * len(befrates)
-        aftrates_noout = [np.nan] * len(befrates)
-        mats_noout = [np.nan] * len(befrates)
-        ids_noout = [np.nan] * len(befrates)
-        names_noout = [np.nan] * len(befrates)
-        # record of outliers to check what I dropped
-        befrate_outliers = [np.nan] * len(befrates)
-        aftrate_outliers = [np.nan] * len(befrates)
-        mat_outliers = [np.nan] * len(befrates)
-        id_outliers = [np.nan] * len(befrates)
-        name_outliers = [np.nan] * len(befrates)
+    # remove outliers to get eout:{{{
+    # something like ycdi__m1c_1c
+    prefix_nonsources = ['__'.join(col.split('__')[1: -1]) for col in dfout.columns]
+    for prefix_nonsource in prefix_nonsources:
+        befrates = list(dfout['iout__' + prefix_nonsource + '__befrate'])
+        aftrates = list(dfout['iout__' + prefix_nonsource + '__aftrate'])
+        ids = list(dfout['iout__' + prefix_nonsource + '__id'])
+        mats = list(dfout['iout__' + prefix_nonsource + '__mat'])
+        names = list(dfout['iout__' + prefix_nonsource + '__name'])
+        sources = list(dfout['iout__' + prefix_nonsource + '__source'])
 
         # now go through and replace rates/maturities accordingly
         for i in range(len(befrates)):
             
-            # general process:{{{
+            # basic, probably unneeded checks:{{{
             # continue if nan
-            if pd.isnull(befrates[i]) is True or pd.isnull(aftrates[i]) is True:
-                continue
+            if pd.isnull(befrates[i]) is True:
+                raise ValueError('befrates is nan when it should not be. Stem: ' + prefix_nonsource + '.')
+            if pd.isnull(aftrates[i]) is True:
+                raise ValueError('befrates is nan when it should not be. Stem: ' + prefix_nonsource + '.')
             if pd.isnull(mats[i]) is True:
-                raise ValueError("befrates and aftrates are not nan but mats is nan. Stem: " + befrate_stem + ".")
+                raise ValueError("befrates and aftrates are not nan but mats is nan. Stem: " + prefix_nonsource + ".")
             if pd.isnull(ids[i]) is True:
-                raise ValueError("befrates and aftrates are not nan but ids is nan. Stem: " + befrate_stem + ".")
+                raise ValueError("befrates and aftrates are not nan but ids is nan. Stem: " + prefix_nonsource + ".")
             if pd.isnull(names[i]) is True:
-                raise ValueError("befrates and aftrates are not nan but names is nan. Stem: " + befrate_stem + ".")
+                raise ValueError("befrates and aftrates are not nan but names is nan. Stem: " + prefix_nonsource + ".")
+            if pd.isnull(sources[i]) is True:
+                raise ValueError("befrates and aftrates are not nan but sources is nan. Stem: " + prefix_nonsource + ".")
 
             # verify befrates, aftrates, mats have same length
             if len(befrates[i]) != len(aftrates[i]):
-                raise ValueError('befrates should have the same length as aftrates. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. aftrates: ' + str(aftrates[i]) + '.')
+                raise ValueError('befrates should have the same length as aftrates. Stem: ' + prefix_nonsource + '. befrates: ' + str(befrates[i]) + '. aftrates: ' + str(aftrates[i]) + '.')
             if len(befrates[i]) != len(mats[i]):
-                raise ValueError('befrates should have the same length as mats. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. mats: ' + str(mats[i]) + '.')
+                raise ValueError('befrates should have the same length as mats. Stem: ' + prefix_nonsource + '. befrates: ' + str(befrates[i]) + '. mats: ' + str(mats[i]) + '.')
             if len(befrates[i]) != len(ids[i]):
-                raise ValueError('befrates should have the same length as ids. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. ids: ' + str(ids[i]) + '.')
+                raise ValueError('befrates should have the same length as ids. Stem: ' + prefix_nonsource + '. befrates: ' + str(befrates[i]) + '. ids: ' + str(ids[i]) + '.')
             if len(befrates[i]) != len(names[i]):
-                raise ValueError('befrates should have the same length as names. Stem: ' + befrate_stem + '. befrates: ' + str(befrates[i]) + '. names: ' + str(names[i]) + '.')
+                raise ValueError('befrates should have the same length as names. Stem: ' + prefix_nonsource + '. befrates: ' + str(befrates[i]) + '. names: ' + str(names[i]) + '.')
+            if len(befrates[i]) != len(sources[i]):
+                raise ValueError('befrates should have the same length as sources. Stem: ' + prefix_nonsource + '. befrates: ' + str(befrates[i]) + '. names: ' + str(sources[i]) + '.')
 
-            # remove elements which are not defined for both befrates and aftrates
-            keepj = []
-            observedids = []
-            for j in range(len(befrates[i])):
-
-                # don't keep if both befrates and aftrates are not defined for a given j
-                # also don't keep if they have an absolute difference of more than 1p.p.
-                # also don't keep if id observed already
-                if pd.isnull(befrates[i][j]) is True or pd.isnull(aftrates[i][j]) is True or isinstance(befrates[i][j], str) is True or isinstance(aftrates[i][j], str) is True or (pd.isnull(ids[i][j]) is False and ids[i][j] in observedids):
-                    None
-                else:
-                    keepj.append(j)
-                    # keep record of ids observed for this yield curve and drop next time observe
-                    observedids.append(ids[i][j])
-
-                # why drop if same id:
-                # getting data from benchmark and non-benchmark bonds so they could point to the same bond with the same id
-                # example: RUS 20190322_1030M have the 3 year benchmark bond pointing to RU000A0JSMA2 and direct data from the non-benchmark bond with id RU000A0JSMA2
-                # so drop one of these
-                # note the rates are not necessarily identical
-                # in the aforementioned case they're from =RR and =RRPS so are actually a bit different
-
-            # only keep non-null
-            befrates[i] = [befrates[i][j] for j in keepj]
-            aftrates[i] = [aftrates[i][j] for j in keepj]
-            mats[i] = [mats[i][j] for j in keepj]
-            ids[i] = [ids[i][j] for j in keepj]
-            names[i] = [names[i][j] for j in keepj]
+            # basic, probably unneeded checks:}}}
 
             # sort by mats
             matsorder = np.argsort(mats[i])
@@ -446,36 +363,29 @@ def getbondshocks_process(df, outputoutliers = False):
             mats[i] = [mats[i][j] for j in list(matsorder)]
             ids[i] = [ids[i][j] for j in list(matsorder)]
             names[i] = [names[i][j] for j in list(matsorder)]
-            # general process:}}}
-
-            # define variable without outlier
-            befrates_noout[i] = befrates[i]
-            aftrates_noout[i] = aftrates[i]
-            mats_noout[i] = mats[i]
-            ids_noout[i] = ids[i]
-            names_noout[i] = names[i]
+            sources[i] = [sources[i][j] for j in list(matsorder)]
 
             # drop i,j if it is an outlier:{{{
             # drop outliers by comparing change in before and after for different maturities
             # need to remove null values beforehand so can compute comparisonchange
             # repeat until no additional outliers found
             oldlen = None
-            while len(befrates_noout[i]) != oldlen:
+            while len(befrates[i]) != oldlen:
                 # record what old length was to verify no more changes made
-                oldlen = len(befrates_noout[i])
+                oldlen = len(befrates[i])
 
                 keepj = []
-                for j in range(len(befrates_noout[i])):
+                for j in range(len(befrates[i])):
                     # get the size of the change in this point
-                    thischange = aftrates_noout[i][j] - befrates_noout[i][j]
+                    thischange = aftrates[i][j] - befrates[i][j]
 
-                    if len(befrates_noout[i]) < 2:
+                    if len(befrates[i]) < 2:
                         # can't get a comparison so just keep if:
                         # level satisfies >=-2 and <= 10
                         # changes is not large
                         comparison = 5
                         comparisonchange = 0
-                        if befrates_noout[i][j] < -2 or befrates_noout[i][j] > 10 or abs(thischange) > 0.2:
+                        if befrates[i][j] < -2 or befrates[i][j] > 10 or abs(thischange) > 0.2:
                             isoutlier = True
                         else:
                             isoutlier = False
@@ -484,19 +394,19 @@ def getbondshocks_process(df, outputoutliers = False):
                         # allows me to compare whether or not j is out of the ordinary
                         if j == 0:
                             # if first point compare to change for second point
-                            comparison = befrates_noout[i][1]
-                            comparisonchange = aftrates_noout[i][1] - befrates_noout[i][1]
-                        elif j == len(befrates_noout[i]) - 1:
+                            comparison = befrates[i][1]
+                            comparisonchange = aftrates[i][1] - befrates[i][1]
+                        elif j == len(befrates[i]) - 1:
                             # if last point compare to change for penultimate point
-                            comparison = befrates_noout[i][j - 1]
-                            comparisonchange = aftrates_noout[i][j - 1] - befrates_noout[i][j - 1]
+                            comparison = befrates[i][j - 1]
+                            comparisonchange = aftrates[i][j - 1] - befrates[i][j - 1]
                         else:
                             # if middle point compare to change for points before and after
-                            comparison = 0.5 * (befrates_noout[i][j - 1] + befrates_noout[i][j + 1])
-                            comparisonchange = 0.5 * (aftrates_noout[i][j - 1] - befrates_noout[i][j - 1] + aftrates_noout[i][j + 1] - befrates_noout[i][j + 1])
+                            comparison = 0.5 * (befrates[i][j - 1] + befrates[i][j + 1])
+                            comparisonchange = 0.5 * (aftrates[i][j - 1] - befrates[i][j - 1] + aftrates[i][j + 1] - befrates[i][j + 1])
 
                         # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
-                        if abs(befrates_noout[i][j] - comparison) > 5 or abs(aftrates_noout[i][j] - comparison) > 5 or abs(thischange) > 1:
+                        if abs(befrates[i][j] - comparison) > 5 or abs(aftrates[i][j] - comparison) > 5 or abs(thischange) > 1:
                             # first check if numbers are very different from nearby numbers
                             # this can sometimes happen if the bond price is mistaken for the bond yield in which case one bond can have a "yield" of 100 rather than 1
                             # also remove if a large change
@@ -528,460 +438,35 @@ def getbondshocks_process(df, outputoutliers = False):
                         keepj.append(j)
 
                 # only keep non-outliers
-                befrates_noout[i] = [befrates_noout[i][j] for j in keepj]
-                aftrates_noout[i] = [aftrates_noout[i][j] for j in keepj]
-                mats_noout[i] = [mats_noout[i][j] for j in keepj]
-                ids_noout[i] = [ids_noout[i][j] for j in keepj]
-                names_noout[i] = [names_noout[i][j] for j in keepj]
-
-            # define outlier variables
-            if len(befrates_noout[i]) != len(befrates[i]):
-                befrate_outliers[i] = befrates[i]
-                aftrate_outliers[i] = aftrates[i]
-                mat_outliers[i] = mats[i]
-                id_outliers[i] = ids[i]
-                name_outliers[i] = names[i]
+                befrates[i] = [befrates[i][j] for j in keepj]
+                aftrates[i] = [aftrates[i][j] for j in keepj]
+                mats[i] = [mats[i][j] for j in keepj]
+                ids[i] = [ids[i][j] for j in keepj]
+                names[i] = [names[i][j] for j in keepj]
+                sources[i] = [sources[i][j] for j in keepj]
 
             # drop i,j if it is an outlier:}}}
 
             # replace with na if []
-            if len(mats_noout[i]) == 0:
-                befrates_noout[i] = np.nan
-                aftrates_noout[i] = np.nan
-                mats_noout[i] = np.nan
-                ids_noout[i] = np.nan
-                names_noout[i] = np.nan
-
-        dfallso[befrate_stem + '__befrate'] = befrates_noout
-        dfallso[befrate_stem + '__aftrate'] = aftrates_noout
-        dfallso[befrate_stem + '__mat'] = mats_noout
-        dfallso[befrate_stem + '__id'] = ids_noout
-        dfallso[befrate_stem + '__name'] = names_noout
-
-        if outputoutliers is True:
-            # this allows me to see what my outlier rule is excluding
-            dfallso[befrate_stem + '__befrate__outlier'] = befrate_outliers
-            dfallso[befrate_stem + '__aftrate_outlier'] = aftrate_outliers
-            dfallso[befrate_stem + '__mat__outlier'] = mat_outliers
-            dfallso[befrate_stem + '__id__outlier'] = id_outliers
-            dfallso[befrate_stem + '__name__outlier'] = name_outliers
-            
-    # go through befrates/aftrates:}}}
-
-    # get overall ranking:{{{
-    for stem in rate_stems + befrate_stems:
-        mats = list(dfallso[stem + '__mat'])
-        ranks = [np.nan] * len(mats)
-        for i in range(len(mats)):
-
-            # stop if maturity is not defined or there are no maturities to consider
-            if pd.isnull(mats[i]) is True or len(mats[i]) == 0:
-                continue
-
-            # exclude maturities over 15 years when doing source ranking
-            mats_max15 = [mat for mat in mats[i] if mat <= 15]
-
-            if len(mats_max15) > 0:
-                minmats = min(mats_max15)
-                maxmats = max(mats_max15)
-                between_3_7 = [mat for mat in mats_max15 if mat > 3 and mat < 7]
-            else:
-                minmats = None
-                maxmats = None
-                between_3_7 = []
-
-            # give ranking where 1 is higher than 0 in goodness
-            if len(mats_max15) == 0:
-                # need to do this case first since when mats == [], minmats and maxmats are undefined
-                matsrank = '0'
-            elif len(mats_max15) >= 10 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
-                matsrank = '6'
-            elif len(mats_max15) >= 8 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
-                matsrank = '5'
-            elif len(mats_max15) >= 6 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
-                matsrank = '4'
-            elif len(mats_max15) >= 5 and minmats <= 3 and maxmats >= 7:
-                matsrank = '3'
-            elif len(mats_max15) >= 4 and minmats <= 5 and maxmats >= 5:
-                matsrank = '2'
-            elif len(mats_max15) >= 4:
-                matsrank = '1'
-            else:
-                matsrank = '0'
-
-            # get second matsrank simply based on the number of maturities available
-            # this only matters if the original matsrank and the sourcerank are the same
-            if len(mats_max15) > 9999:
-                raise ValueError('matsrank2 will not work properly since too many maturities available.')
-            matsrank2 = str(len(mats_max15)).zfill(4)
-
-            # get overall ranking
-            # note source only matters if matsrank is the same for two sources
-            # the underscore isn't really necesary given that these are strings but it looks nicer...
-            ranks[i] = matsrank + '_' + matsrank2
-
-        dfallso[stem + '__rank'] = ranks
-    # get overall ranking:}}}
-
-    # add in 1so version:{{{
-    # data frame for output for single source by shock/zone/date point
-    df1so = pd.DataFrame(index = df.index)
-
-    for stem in rate_stems + befrate_stems:
-        # get lists of the stem
-        if stem + "__rate" in dfallso.columns:
-            doingbefrate = False
-        else:
-            doingbefrate = True
-
-        mats = list(dfallso[stem + "__mat"])
-        ranks = list(dfallso[stem + "__rank"])
-        if doingbefrate is True:
-            befrates = list(dfallso[stem + "__befrate"])
-            aftrates = list(dfallso[stem + "__aftrate"])
-        else:
-            rates = list(dfallso[stem + "__rate"])
-
-        # get version of stem without source
-        # i.e. something like ref__ycdi__m1c_1c__rate
-        stemnosource = '__'.join(stem.split('__')[1: ])
-        source = '__'.join(stem.split('__')[: 1])
-
-        if stemnosource + '__mat' not in df1so:
-            # if variable without source defined then just take this as the variable
-            mats_new = mats
-            ranks_new = ranks
-            if doingbefrate is True:
-                befrates_new = befrates
-                aftrates_new = aftrates
-            else:
-                rates_new = rates
-
-            sources_new = [np.nan if pd.isnull(befrate) is True else source for befrate in befrates]
-
-        else:
-            # if variable without source already defined then need to go through by i and replace if rank is better than existing rank
-
-            # use existing variables in df1so as starting point
-            mats_new = list(df1so[stemnosource + "__mat"])
-            ranks_new = list(df1so[stemnosource + "__rank"])
-            if doingbefrate is True:
-                befrates_new = list(df1so[stemnosource + "__befrate"])
-                aftrates_new = list(df1so[stemnosource + "__aftrate"])
-            else:
-                rates_new = list(df1so[stemnosource + "__rate"])
-            sources_new = list(df1so[stemnosource + "__source"])
-
-            # then replace new variable if better
-            for i in range(len(mats)):
-                if pd.isnull(ranks[i]) is False and (pd.isnull(ranks_new[i]) is True or ranks[i] > ranks_new[i]):
-                    mats_new[i] = mats[i]
-                    ranks_new[i] = ranks[i]
-                    if doingbefrate is True:
-                        befrates_new[i] = befrates[i]
-                        aftrates_new[i] = aftrates[i]
-                    else:
-                        rates_new[i] = rates[i]
-                    sources_new[i] = source
-
-        df1so[stemnosource + "__mat"] = mats_new
-        df1so[stemnosource + "__rank"] = ranks_new
-        if doingbefrate is True:
-            df1so[stemnosource + "__befrate"] = befrates_new
-            df1so[stemnosource + "__aftrate"] = aftrates_new
-        else:
-            df1so[stemnosource + "__rate"] = rates_new
-        df1so[stemnosource + "__source"] = sources_new
-
-    # add in 1so version:}}}
-
-    dfallso = dfallso.sort_index(axis = 1)
-    df1so = df1so.sort_index(axis = 1)
-
-    return(dfallso, df1so)
-
-
-def getbondshocks_yc_allso(dfallso, ycnames = None):
-    """
-    Get yield curves by combining information from all sources
-    I use all sources to construct my yield curve measures
-    Taking sources by their order in dfallso
-    """
-    if ycnames is None:
-        return(None)
-
-
-    # verify no bad ycnames
-    badycnames = set(ycnames) - {ycname for ycname in ycnames if ycname.startswith('ridgeall__')}
-    if len(badycnames) > 0:
-        raise ValueError("Bad ycnames: " + str(badycnames) + ".")
-
-    ratestodo = [col for col in dfallso if col.split('__')[-1] in ['rate', 'befrate', 'aftrate']]
-
-    dfyc = pd.DataFrame(index = dfallso.index)
-
-    for col in ratestodo:
-        # get stem
-        stem = '__'.join(col.split('__')[: -1])
-
-        # ref__ycdi__m1c_1c__rate
-        colnosource = '__'.join(col.split('__')[1: ])
-
-        # now get rates, mats and ranks
-        rates = list(dfallso[col])
-        mats = list(dfallso[stem + '__mat'])
-        ranks = list(dfallso[stem + '__rank'])
-
-        # ridgealls:{{{
-        ridgealls = [ycname for ycname in ycnames if ycname.startswith('ridgeall__')]
-        for ridgename in ridgealls:
-            window = ridgename.replace('ridgeall__', '', 1)
-            mat1 = window.split('_')[0]
-            mat2 = window.split('_')[1]
-
-            if colnosource + '__' + ridgename not in dfyc:
-                ridges = [np.nan for i in range(len(rates))]
-            else:
-                ridges = dfyc[colnosource + '__' + ridgename].to_list()
-
-            for i in range(len(rates)):
-                if pd.isnull(rates[i]) is True:
-                    continue
-                
-                # only add if does not already exist
-                if np.isnan(ridges[i]):
-                    ridges[i] = ridge_yieldcurve(mats[i], rates[i], mat1, mat2, matout_string = True)
-
-            # add into dataset
-            dfyc[colnosource + '__' + ridgename] = ridges
-        # ridgealls:}}}
-
-    # replace [na, na, ...] with na:{{{
-    # long lists of nas can take up a lot of file space so replace them with a single na
-    ridgecols = [col for col in dfyc if col.split('__')[-1].startswith('ridgeall')]
-    for ridgecol in ridgecols:
-        ridges = list(dfyc[ridgecol])
-        for i in range(len(ridges)):
-            # if already na continue
-            if pd.isnull(ridges[i]) is True:
-                continue
-            # if ridges[i] is only made up of nas
-            if len(set(ridges[i]) - set([np.nan])) == 0:
-                ridges[i] = np.nan
-        dfyc[ridgecol] = ridges
-    # replace [na, na, ...] with na:}}}
-
-    # add di:{{{
-    # only do this for befrates/aftrates not rates
-    ratestodo = [col for col in dfallso if col.split('__')[-1] in ['befrate']]
-    for col in ratestodo:
-        colnosource = '__'.join(col.split('__')[1: ])
-        for ycname in ycnames:
-            colname = colnosource + '__' + ycname
-            dfyc[colname.replace('__befrate__', '__di__')] = dfyc[colname.replace('__befrate__', '__aftrate__')] - dfyc[colname]
-
-    # add di:}}}
-
-    dfyc = dfyc.sort_index(axis = 1)
-
-    return(dfyc)
-
-
-def getbondshocks_yc_1so(df1so, ycnames = None, printdetails = False):
-    """
-    Computes yield curve on the best source for each rate using the best source in df1so
-    Note this does not compute my main ridge yield curve measure which uses all potential sources
-
-    ycnames is a list including up to ['ols', 'nslu', 'ridge1_1so', 'ridge2_1so', 'nsme']
-    The function is only run on the specified elements in ycnames
-    They are saved separately
-
-    ols: OLS
-    nslu: Nelson-Siegel with Luphord code
-    nsme: Nelson-Siegel with my code (slow so I leave it out by default)
-    ridge1_1so/ridge2_1so: nonparametric method where I'm basically taking the closest yield curve (but not my main version of this - since I'm not including all sources)
-
-    Note nsme takes a long time to run (as in 100x the others since I'm running many regressions probably inefficiently during it). The others are fairly quick.
-    """
-
-    if ycnames is None:
-        return(None)
-
-    # verify no bad ycnames
-    badycnames = set(ycnames) - {ycname for ycname in ycnames if ycname.startswith('ridge__')} - {ycname for ycname in ycnames if ycname.startswith('nslu_')}
-    if len(badycnames) > 0:
-        raise ValueError("Bad ycnames: " + str(badycnames) + ".")
-
-    ratestodo = [col for col in df1so if col.split('__')[-1] in ['rate', 'befrate', 'aftrate']]
-
-    dfyc = pd.DataFrame(index = df1so.index)
-
-    # create rates/befrates/aftrates:{{{
-    mats_output = list(range(1, 31))
-    mats_output_max15 = list(range(1, 16))
-    for col in ratestodo:
-        if printdetails is True:
-            print(str(datetime.datetime.now()) + ' Starting column: ' + col + '.')
-        # get stem
-        stem = '__'.join(col.split('__')[: -1])
-
-        # now get rates, mats and ranks
-        rates = list(df1so[col])
-        mats = list(df1so[stem + '__mat'])
-        ranks = list(df1so[stem + '__rank'])
-
-        # get versions with >15 year maturities removed
-        mats_max15 = [np.nan] * len(rates)
-        rates_max15 = [np.nan] * len(rates)
-        for i in range(len(rates)):
-            if pd.isnull(mats[i]) is True:
-                continue
-            mats_max15_elements = [j for j in range(len(mats[i])) if mats[i][j] <= 15]
-            mats_max15[i] = [mats[i][j] for j in mats_max15_elements]
-            rates_max15[i] = [rates[i][j] for j in mats_max15_elements]
-            
-        # ridges:{{{
-        ridges = [ycname for ycname in ycnames if ycname.startswith('ridge__')]
-        for ridgename in ridges:
-            window = ridgename.replace('ridge__', '', 1)
-            mat1 = window.split('_')[0]
-            mat2 = window.split('_')[1]
-            
-            rateoutputs = [np.nan] * len(rates)
-
-            for i in range(len(rates)):
-                # stop if no rates to consider
-                if pd.isnull(rates[i]) is True:
-                    continue
-                
-                rateoutputs[i] = ridge_yieldcurve(mats[i], rates[i], mat1, mat2, matout_string = True)
-
-            # add into dataset
-            dfyc[col + '__' + ridgename] = rateoutputs
-        # ridges:}}}
-
-        # nslu:{{{
-        nslus = [ycname for ycname in ycnames if ycname.startswith('nslu_')]
-
-        # general nslu computation:{{{
-        if len(nslus) > 0:
-
-            params = [np.nan] * len(rates)
-            curves = [np.nan] * len(rates)
-
-            for i in range(len(rates)):
-                if pd.isnull(rates[i]) is True or ranks[i] < '1':
-                    continue
-
-                success = False
-                try:
-                    # note dividing by 100
-                    curve, status = calibrate_ns_ols(np.array(mats_max15[i]), np.array(rates_max15[i]) / 100, tau0 = 1.0)
-                    if status['success'] is True:
-                        success = True
-                except Exception:
-                    None
-
-                if success is True:
-                    paramdict = vars(curve)
-
-                    # drop bad parameter:{{{
-                    """
-                    A few cases where algorithm does not work properly
-                    for example Turkey 20181025d with following parameters:
-                    rates: [24.026, 25.63, 24.4, 21.61, 18.28]
-                    maturities: [0.5, 0.898, 1.799, 2.91, 9.369]
-                    NSLU parameters: [0.24807759929782192, -0.0001242337575754526, -5.045433797156877e-06, -0.3656479693246273]
-                    NSLU output: [24.747427383791656, 24.36880120830213, 20.891315860711074, -13.358179418230915, -358.02256000366066, -3765.5866839269547, -35175.06951371506, -274212.8363491629, -1012341.2905774283, 24006077.95079504, 869145377.1650635, 19802051314.59813, 388680603189.31506, 7092446873687.183, 124017502376382.94]
-                    issue may be that all but one rate has a maturity of <3 years
-                    last NSLU parameter is negative which I think is driving strange numbers so drop if that happens
-                    """
-                    if paramdict['tau'] <= 0:
-                        params[i] = 'NSFailed'
-                        continue
-                    # drop bad parameter:}}}
-
-                    params[i] = [paramdict['beta0'], paramdict['beta1'], paramdict['beta2'], paramdict['tau']]
-                    curves[i] = curve
-
-                else:
-                    if False:
-                        print('\nFailed Nelson-Siegel:')
-                        print('Col: ' + str(col) + '.')
-                        print('Index: ' + str(i) + '.')
-                        print('Maturities: ' + str(mats_max15[i]) + '.')
-                        print('Yields: ' + str(rates_max15[i]) + '.')
-
-                    params[i] = 'NSFailed'
-
-            # add into dataset
-            dfyc[col + '__nslu__params'] = params
-        # general nslu computation:}}}
-
-        # go through each desired maturity/rank
-        # specify something like nslu__y4 or nslu_r5__m06
-        for ycnamenslu in nslus:
-            firstpart = ycnamenslu.split('__')[0]
-            if firstpart == 'nslu':
-                rankmin = 4
-            else:
-                rankmin = int(firstpart.replace('nslu_r', ''))
-            secondpart = ycnamenslu.split('__')[1]
-            sptime = secondpart[0]
-            maturity = int(secondpart[1: ])
-            if sptime == 'y' or sptime == 'z':
-                None
-            elif sptime == 'm':
-                maturity = maturity / 12
-            elif sptime == 'd':
-                maturity = maturity / 365
-            else:
-                raise ValueError('ycnamenslu misspecified: ' + ycnamenslu + '.')
-                
-            rateoutputs = [np.nan] * len(rates)
-            for i in range(len(rates)):
-                if pd.isnull(curves[i]):
-                    continue
-                if ranks[i] < str(rankmin):
-                    continue
-
-                # check to ensure not defining bad variables:{{{
-                # Issue with Nelson-Siegel estimation:
-                # - If I only have data for year x onwards, the data pre-year x can be very off
-                # - For example, when I had data for years 2-15 which went from 16-20 (with a bit of a sudden jump), Nelson-Siegel estimated the yield for a 1-year bond to be 14000%
-                # - So should using the estimates for Nelson-Siegel for years for which I do not have the same or a lower maturity bond
-                # - Less of an issue for maturities that exceed my higest maturity because of the way the exponentials in Nelson-Siegel work
-                # - When computing change in yield, drop very high interest rates and large changes as further check
-                # - Note need to adjust which early maturities drop depending on strictness of shock i.e. with s1 can only compute 5+ year change in yield compared to with s5 can compute 1+ year change
-
-                # don't worry about doing this for ycdi_for where I've already checked the appropriate bonds to include
-                earliestmat = mats_max15[i][0]
-                if earliestmat > maturity:
-                    continue
-
-                # check to ensure not defining bad variables:}}}
-
-                # note multiplying by 100 to return to percentage form
-                rateoutputs[i] = curves[i](maturity) * 100
-
-            # add into dataset
-            dfyc[col + '__' + ycnamenslu] = rateoutputs
-        # nslu:}}}
-
-    # create rates/befrates/aftrates:}}}
-
-    # add di:{{{
-    # only do this for befrates/aftrates not rates
-    ratestodo = [col for col in df1so if col.split('__')[-1] in ['befrate']]
-    for col in ratestodo:
-
-        for ycname in ycnames:
-            colname = col + '__' + ycname
-            dfyc[colname.replace('__befrate__', '__di__')] = dfyc[colname.replace('__befrate__', '__aftrate__')] - dfyc[colname]
-
-    # add di:}}}
-
-    return(dfyc)
+            if len(mats[i]) == 0:
+                befrates[i] = np.nan
+                aftrates[i] = np.nan
+                mats[i] = np.nan
+                ids[i] = np.nan
+                names[i] = np.nan
+                sources[i] = np.nan
+
+        dfout['eout__' + prefix_nonsource + '__befrate'] = befrates
+        dfout['eout__' + prefix_nonsource + '__aftrate'] = aftrates
+        dfout['eout__' + prefix_nonsource + '__mat'] = mats
+        dfout['eout__' + prefix_nonsource + '__id'] = ids
+        dfout['eout__' + prefix_nonsource + '__name'] = names
+        dfout['eout__' + prefix_nonsource + '__source'] = sources
+    # remove outliers to get eout:}}}
+
+    dfout = dfout.sort_index(axis = 1)
+
+    return(dfout)
 
 
 def getindividualbonds(df):
@@ -990,61 +475,8 @@ def getindividualbonds(df):
     Rather than lists
     """
 
-    # get list of rates to process/rank:{{{
-    rate_stems = [col[: -6] for col in df.columns if col.endswith('__rate')]
+    # get list of stems
     befrate_stems = [col[: -9] for col in df.columns if col.endswith('__befrate')]
-    aftrate_stems = [col[: -9] for col in df.columns if col.endswith('__aftrate')]
-
-    # verify befrates and aftrates match
-    if befrate_stems != aftrate_stems:
-        raise ValueError('befrate_stems and aftrate_stems should match.')
-    # verify no intersection between rate_stems and befrate_stems
-    if len(set(rate_stems) & set(befrate_stems)) > 0:
-        raise ValueError("rate_stems and befrate_stems have intersecting components: " + str(set(rate_stems) & set(befrate_stems)) + ".")
-    # get list of rates to process/rank:}}}
-
-    # go through rates:{{{
-    stemstoconcat = []
-    for rate_stem in rate_stems:
-        rates = list(df[rate_stem + '__rate'])
-        mats = list(df[rate_stem + '__mat'])
-        ids = list(df[rate_stem + '__id'])
-        names = list(df[rate_stem + '__name'])
-
-        rowstoconcat = []
-
-        # now go through and replace rates/maturities accordingly
-        for i in range(len(rates)):
-            outdict = {}
-            
-            # stop if nan
-            if isinstance(rates[i], list) is False and pd.isnull(rates[i]) is True:
-                # add empty row with no columns
-                rowstoconcat.append(pd.DataFrame(index = [0]))
-                continue
-
-            if isinstance(rates[i], list) is True and len(rates[i]) == 0:
-                # add empty row with no columns
-                rowstoconcat.append(pd.DataFrame(index = [0]))
-                continue
-
-            for j in range(len(rates[i])):
-            
-                outdict[rate_stem + '__' + names[i][j] + '__rate'] = [rates[i][j]]
-                outdict[rate_stem + '__' + names[i][j] + '__mat'] = [mats[i][j]]
-                outdict[rate_stem + '__' + names[i][j] + '__id'] = [ids[i][j]]
-
-            dfrow = pd.DataFrame(outdict)
-            rowstoconcat.append(dfrow)
-
-        dfstem = pd.concat(rowstoconcat)
-        dfstem.index = df.index
-
-        stemstoconcat.append(dfstem)
-
-    if len(stemstoconcat) > 0:
-        df2 = pd.concat(stemstoconcat, axis = 1)
-    # go through rates:}}}
 
     # go through befrates/aftrates:{{{
     stemstoconcat = []
@@ -1054,6 +486,7 @@ def getindividualbonds(df):
         mats = list(df[befrate_stem + '__mat'])
         ids = list(df[befrate_stem + '__id'])
         names = list(df[befrate_stem + '__name'])
+        sources = list(df[befrate_stem + '__source'])
 
         rowstoconcat = []
 
@@ -1061,23 +494,35 @@ def getindividualbonds(df):
         for i in range(len(befrates)):
             outdict = {}
             
-            # stop if nan
-            if isinstance(befrates[i], list) is False and pd.isnull(befrates[i]) is True:
-                # add empty row with no columns
-                rowstoconcat.append(pd.DataFrame(index = [0]))
-                continue
-
-            if isinstance(befrates[i], list) is True and len(befrates[i]) == 0:
+            # stop if nan or empty list
+            if (isinstance(befrates[i], list) is False and pd.isnull(befrates[i]) is True) or (isinstance(befrates[i], list) is True and len(befrates[i]) == 0):
                 # add empty row with no columns
                 rowstoconcat.append(pd.DataFrame(index = [0]))
                 continue
 
             for j in range(len(befrates[i])):
+                # this is either "e" (excluding outliers) or "i" (including outliers)
+                outliertype = befrate_stem.split('__')[0][0]
+                ycdi = befrate_stem.split('__')[1]
+                if ycdi == 'ycdi':
+                    ycpart = 'yc'
+                elif ycdi == 'ycdi_il':
+                    ycpart = 'yi'
+                else:
+                    raise ValueError('ycdi part misspecified')
+                # m1c1c
+                timeframe = befrate_stem.split('__')[2]
+
+                # replace z_deu_ref with zdeuref
+                source = sources[i][j].replace('_', '')
+
+                befname = 'yc_' + timeframe + '_' + outliertype + source + '_0_na_' + names[i][j]
             
-                outdict[befrate_stem + '__' + names[i][j] + '__befrate'] = [befrates[i][j]]
-                outdict[befrate_stem + '__' + names[i][j] + '__aftrate'] = [aftrates[i][j]]
-                outdict[befrate_stem + '__' + names[i][j] + '__mat'] = [mats[i][j]]
-                outdict[befrate_stem + '__' + names[i][j] + '__id'] = [ids[i][j]]
+                outdict[befname] = [befrates[i][j]]
+                outdict[befname.replace('_0_', '_1_')] = [aftrates[i][j]]
+                outdict[befname.replace('_0_', '_d_')] = [aftrates[i][j] - befrates[i][j]]
+                outdict[befname.replace('_0_', '_m_')] = [mats[i][j]]
+                outdict[befname.replace('_0_', '_id_')] = [ids[i][j]]
 
             dfrow = pd.DataFrame(outdict)
             rowstoconcat.append(dfrow)
@@ -1096,8 +541,447 @@ def getindividualbonds(df):
     return(df2)
 
     
-def forwarddiff(df, prefix, ycnamestart, ycnameend):
+def getbondshocks_yc(dfprocessed, inputlist):
     """
+    Take the output of getbondshocks_process and get yield curves based on inputlist
+    inputlist is a list of dictionaries each defining a measure to construct
+    """
+    # get list of prefixes for processed bonds
+    # for example: eout__ycdi__m1c_1c
+    prefixes = sorted(list(set(['__'.join(col.split('__')[0: 3]) for col in dfprocessed.columns])))
+    # get bond types
+    # for example ['ycdi'], ['ycdi', 'ycdi_il']
+    bondtypes = sorted(list(set([col.split('__')[1] for col in dfprocessed.columns])))
+    # get bond types
+    # for example ['m1c_1c', 'm1c_1o']
+    timeframes = sorted(list(set([col.split('__')[2] for col in dfprocessed.columns])))
+
+    nspossibleval = ['ns', 'ns1', 'ns2', 'ns3', 'ns4', 'ns5']
+
+    # adjust input dicts:{{{
+
+    # go through inputlist initially
+    for i, thisdict in enumerate(inputlist):
+        # yctype is na/ns[num/]/wi
+        if 'yctype' not in thisdict:
+            raise ValueError('yctype must be defined for every inputlist')
+
+        # go through and verify yctype makes sense
+        if thisdict['yctype'] == 'na':
+            thisdict['nsrank'] = None
+        elif thisdict['yctype'] == 'wi':
+            thisdict['nsrank'] = None
+        elif thisdict['yctype'] in nspossibleval:
+            if thisdict['yctype'] == 'ns':
+                # use default ns rank
+                thisdict['nsrank'] = 4
+            else:
+                thisdict['nsrank'] = int(thisdict['yctype'][2])
+            if 'name' not in thisdict:
+                thisdict['name'] = ['m06', 'y01', 'y02', 'y03', 'y04', 'y05', 'y07', 'y10', 'y15']
+        else:
+            # yctype should be in one of this list
+            raise ValueError('yctype misdefined: ' + yctype + '.')
+
+        if 'name' not in thisdict:
+            if thisdict['yctype'] == 'na':
+                raise ValueError('Need to specify name of bonds I want to consider e.g. y01, m06 as "name" in inputlist dict: ' + str(thisdict) + '.')
+            elif thisdict['yctype'] == 'wi':
+                raise ValueError('Need to specify window of bonds I want to consider e.g. y01y03, m06y02 as "name" in inputlist dict: ' + str(thisdict) + '.')
+            else:
+                raise ValueError('Need to specify name in inputlist dict: ' + str(thisdict) + '.')
+
+        # ensure name is a list in case I only specified one value
+        if isinstance(thisdict['name'], str):
+            thisdict['name'] = [thisdict['name']]
+
+        # whether do nominal/inflation-linked or both
+        if 'bondtype' not in thisdict:
+            thisdict['bondtype'] = bondtypes
+        else:
+            if isinstance(thisdict['bondtype'], str):
+                thisdict['bondtype'] = [thisdict['bondtype']]
+
+            # if specified c replace with ycdi
+            # if specified l replace with ycdi_il
+            bondtypes2 = []
+            for bondtype in thisdict['bondtype']:
+                if bondtype == 'c':
+                    bondtypes2.append('ycdi')
+                elif bondtype == 'l':
+                    bondtypes2.append('ycdi_il')
+                else:
+                    bondtypes2.append(bondtype)
+            thisdict['bondtype'] = bondtypes2
+
+            # verify bondtypes specified are available
+            for bondtype in thisdict['bondtype']:
+                if bondtype not in bondtypes:
+                    raise ValueError('Specified bondtype not in list of bondtypes: Bond type: ' + bondtype + '. Timeframes: ' + str(bondtypes) + '.')
+
+        # which timeframes cover
+        if 'timeframe' not in thisdict:
+            thisdict['timeframe'] = timeframes
+        else:
+            if isinstance(thisdict['timeframe'], str):
+                thisdict['timeframe'] = [thisdict['timeframe']]
+            # go through timeframes in order
+            thisdict['timeframe'] = sorted(thisdict['timeframe'])
+            # verify that the specified timeframes are correct
+            for timeframe in thisdict['timeframe']:
+                if timeframe not in timeframes:
+                    raise ValueError('Specified timeframe not in list of timeframes: Timeframe: ' + timeframe + '. Timeframes: ' + str(timeframes) + '.')
+
+        # whether exclude/include outliers or do both
+        if 'outtype' not in thisdict:
+            # this means I exclude outliers
+            thisdict['outtype'] = ['e']
+        else:
+            if isinstance(thisdict['outtype'], str):
+                thisdict['outtype'] = [thisdict['outtype']]
+            # convert to sorted list
+            thisdict['outtype'] = sorted(list(thisdict['outtype']))
+            for outtype in thisdict['outtype']:
+                if outtype not in ['e', 'i']:
+                    raise ValueError('Specified outtype not e/i. Outtype: ' + outtype + '.')
+
+        # which sources cover
+        if 'source' not in thisdict:
+            # "a" means I'm including all sources
+            thisdict['source'] = 'a'
+
+        if 'addinfovars' not in thisdict:
+            thisdict['addinfovars'] = False
+
+        # verify no undefined words in thisdict
+        for word in thisdict:
+            if word not in ['yctype', 'nsrank', 'name', 'bondtype', 'timeframe', 'outtype', 'source', 'addinfovars']:
+                raise ValueError('Bad word in ycinputlist dict: ' + word + '.')
+
+        # update thisdict
+        inputlist[i] = thisdict
+
+    # adjust input dicts:}}}
+
+    # outdict to which I output dfout columns
+    outdict = {}
+
+    # go through columns one at a time
+    for thisdict in inputlist:
+        for bondtype in thisdict['bondtype']:
+            for timeframe in thisdict['timeframe']:
+                for outtype in thisdict['outtype']:
+                    # ADD NELSON SIEGEL HERE!!!
+
+                    inputprefix = outtype + 'out__' + bondtype + '__' + timeframe
+
+                    # get processed columns as lists
+                    aftrates_list = dfprocessed[inputprefix + '__aftrate'].tolist()
+                    befrates_list = dfprocessed[inputprefix + '__befrate'].tolist()
+                    ids_list = dfprocessed[inputprefix + '__id'].tolist()
+                    mats_list = dfprocessed[inputprefix + '__mat'].tolist()
+                    names_list = dfprocessed[inputprefix + '__name'].tolist()
+                    sources_list = dfprocessed[inputprefix + '__source'].tolist()
+
+                    # get output prefix
+                    if bondtype == 'ycdi':
+                        bondtype2 = 'c'
+                    elif bondtype == 'ycdi_il':
+                        bondtype2 = 'l'
+                    else:
+                        raise ValueError('bondtype should be in ycdi or ycdi_il.')
+                    # replace hyphens in source i.e. z_deu_ref becomes zdeuref
+                    source = thisdict['source'].replace('_', '')
+                    # first four parts (plus last hyphen) of output name
+                    outputprefix = 'y' + bondtype2 + '_' + timeframe.replace('_', '') + '_' + outtype + source + '_' + thisdict['yctype']
+
+                    # create lists in outdict
+                    for name in thisdict['name']:
+                        # replace y00_y01 with y00y01
+                        name2 = name.replace('_', '')
+
+                        # I always want certain lists
+                        outdict[outputprefix + '_0_' + name2] = [np.nan] * len(dfprocessed)
+                        outdict[outputprefix + '_1_' + name2] = [np.nan] * len(dfprocessed)
+                        outdict[outputprefix + '_d_' + name2] = [np.nan] * len(dfprocessed)
+
+                        # if yctype is na or wi add info by maturity
+                        # however I use this very rarely
+                        if thisdict['addinfovars'] is True and thisdict['yctype'] in ['na', 'wi']:
+                            outdict[outputprefix + '_i_r0_' + name2] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_r1_' + name2] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_i_' + name2] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_m_' + name2] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_n_' + name2] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_s_' + name2] = [np.nan] * len(dfprocessed)
+                            
+                    # only for ns case - add Nelson-Siegel parameters
+                    if thisdict['yctype'] in nspossibleval:
+                        # always add parameters for ns
+                        outdict[outputprefix + '_i_p0'] = [np.nan] * len(dfprocessed)
+                        outdict[outputprefix + '_i_p1'] = [np.nan] * len(dfprocessed)
+                        # always output rank for ns
+                        outdict[outputprefix + '_i_rk'] = [np.nan] * len(dfprocessed)
+
+                        # if yctype is na or wi add info for overall bond
+                        if thisdict['addinfovars'] is True:
+                            outdict[outputprefix + '_i_r0'] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_r1'] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_i'] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_m'] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_n'] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_s'] = [np.nan] * len(dfprocessed)
+
+                    # go through one row of columns at a time
+                    for i in range(len(dfprocessed)):
+                        
+                        # selecting elements to use by row:{{{
+                        # get single row
+                        befrates = befrates_list[i]
+                        aftrates = aftrates_list[i]
+                        ids = ids_list[i]
+                        mats = mats_list[i]
+                        names = names_list[i]
+                        sources = sources_list[i]
+
+                        # continue if no data for this row
+                        if isinstance(befrates, list) is False and pd.isnull(befrates):
+                            continue
+
+                        # which points keep generally
+                        keepjs = []
+                        existingids = []
+                        for j in range(len(befrates)):
+                            if (thisdict['source'] in ['a', 'b'] or sources[j] == thisdict['source']) and ids[j] not in existingids:
+                                keepjs.append(j)
+
+                        # adjust lists keeping relevant sources/ids
+                        befrates = [befrates[j] for j in keepjs]
+                        aftrates = [aftrates[j] for j in keepjs]
+                        ids = [ids[j] for j in keepjs]
+                        mats = [mats[j] for j in keepjs]
+                        names = [names[j] for j in keepjs]
+                        sources = [sources[j] for j in keepjs]
+
+                        # stop if list is empty
+                        if len(befrates) == 0:
+                            continue
+
+                        # keep only best source
+                        if thisdict['source'] == 'b':
+                            # figure out best source
+                            bestsource = None
+                            bestrank = None
+                            for source in set(sources):
+                                matstemp = [mats[j] for j in range(len(sources)) if sources[j] == source]
+                                thisrank = getranking(matstemp)
+                                if bestrank is None or thisrank > bestrank:
+                                    bestsource = source
+
+                            # keep only that source
+                            keepjs = []
+                            for j in range(len(befrates)):
+                                if sources[j] == bestsource:
+                                    keepjs.append(j)
+                            befrates = [befrates[j] for j in keepjs]
+                            aftrates = [aftrates[j] for j in keepjs]
+                            ids = [ids[j] for j in keepjs]
+                            mats = [mats[j] for j in keepjs]
+                            names = [names[j] for j in keepjs]
+                            sources = [sources[j] for j in keepjs]
+
+                        # get rank
+                        thisrank = getranking(mats)
+                        # stop if rank is too low
+                        if thisdict['nsrank'] is not None and thisrank < thisdict['nsrank']:
+                            continue
+
+                        # selecting elements to use by row:}}}
+
+                        # do this only once - not for every name in thisdict['name']
+                        if thisdict['yctype'] in nspossibleval:
+                            # getting Nelson-Siegel parameters:{{{
+                            # only need to do once for each row
+
+                            # verify ranking is high enough for nelson-siegel
+                            if thisrank < 10000:
+                                continue
+
+                            success = False
+                            try:
+                                # note dividing by 100
+                                befcurve, befstatus = calibrate_ns_ols(np.array(mats), np.array(befrates) / 100, tau0 = 1.0)
+                                aftcurve, aftstatus = calibrate_ns_ols(np.array(mats), np.array(aftrates) / 100, tau0 = 1.0)
+                                if befstatus['success'] is True and aftstatus['success'] is True:
+                                    success = True
+                            except Exception:
+                                None
+
+                            """ when NS Luphord algorithm fails{{{
+                            A few cases where algorithm does not work properly
+                            for example Turkey 20181025d with following parameters:
+                            rates: [24.026, 25.63, 24.4, 21.61, 18.28]
+                            maturities: [0.5, 0.898, 1.799, 2.91, 9.369]
+                            NSLU parameters: [0.24807759929782192, -0.0001242337575754526, -5.045433797156877e-06, -0.3656479693246273]
+                            NSLU output: [24.747427383791656, 24.36880120830213, 20.891315860711074, -13.358179418230915, -358.02256000366066, -3765.5866839269547, -35175.06951371506, -274212.8363491629, -1012341.2905774283, 24006077.95079504, 869145377.1650635, 19802051314.59813, 388680603189.31506, 7092446873687.183, 124017502376382.94]
+                            issue may be that all but one rate has a maturity of <3 years
+                            last NSLU parameter is negative which I think is driving strange numbers so drop if that happens
+                            }}}"""
+
+                            if success is True:
+                                befparamdict = vars(befcurve)
+                                aftparamdict = vars(aftcurve)
+
+                                # drop if bad parameter
+                                if befparamdict['tau'] <= 0 or aftparamdict['tau'] <= 0:
+                                    continue
+
+                                outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
+                                outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
+
+                            else:
+                                if False:
+                                    print('\nFailed Nelson-Siegel:')
+                                    print('Col: ' + str(col) + '.')
+                                    print('Index: ' + str(i) + '.')
+                                    print('Maturities: ' + str(mats_max15[i]) + '.')
+                                    print('Yields: ' + str(rates_max15[i]) + '.')
+
+                                continue
+                            # getting Nelson-Siegel parameters:}}}
+
+                            # save additional NS vars:{{{
+                            if thisdict['addinfovars'] is True:
+                                outdict[outputprefix + '_i_rk'][i] = thisrank
+                                outdict[outputprefix + '_i_r0'][i] = befrates
+                                outdict[outputprefix + '_i_r1'][i] = aftrates
+                                outdict[outputprefix + '_i_i'][i] = ids
+                                outdict[outputprefix + '_i_m'][i] = mats
+                                outdict[outputprefix + '_i_n'][i] = names
+                                outdict[outputprefix + '_i_s'][i] = sources
+                            # save additional NS vars:}}}
+
+
+                        # get yc
+                        for name in thisdict['name']:
+                            name2 = name.replace('_', '')
+
+                            if thisdict['yctype'] == 'na':
+                                # keep only name starting with this value
+                                keepjs = []
+                                for j in range(len(befrates)):
+                                    if names[j] == name:
+                                        keepjs.append(j)
+                                befrates2 = [befrates[j] for j in keepjs]
+                                aftrates2 = [aftrates[j] for j in keepjs]
+                                ids2 = [ids[j] for j in keepjs]
+                                mats2 = [mats[j] for j in keepjs]
+                                names2 = [names[j] for j in keepjs]
+                                sources2 = [sources[j] for j in keepjs]
+
+                                if len(befrates2) == 0:
+                                    continue
+
+                                # stop if no values
+                                # before/after computation
+                                # take mean in case multiple sources
+                                before = np.mean(befrates2)
+                                after = np.mean(aftrates2)
+                                di = after - before
+
+                            elif thisdict['yctype'] in nspossibleval:
+                                
+                                maturity = getsinglemat(name)
+
+                                # check to ensure not defining bad variables:{{{
+                                # Issue with Nelson-Siegel estimation:
+                                # - If I only have data for year x onwards, the data pre-year x can be very off
+                                # - For example, when I had data for years 2-15 which went from 16-20 (with a bit of a sudden jump), Nelson-Siegel estimated the yield for a 1-year bond to be 14000%
+                                # - So should using the estimates for Nelson-Siegel for years for which I do not have the same or a lower maturity bond
+                                # - Less of an issue for maturities that exceed my higest maturity because of the way the exponentials in Nelson-Siegel work
+                                # - When computing change in yield, drop very high interest rates and large changes as further check
+                                # - Note need to adjust which early maturities drop depending on strictness of shock i.e. with s1 can only compute 5+ year change in yield compared to with s5 can compute 1+ year change
+
+                                # don't worry about doing this for ycdi_for where I've already checked the appropriate bonds to include
+                                earliestmat = mats[0]
+                                if earliestmat > maturity:
+                                    continue
+
+                                # check to ensure not defining bad variables:}}}
+
+                                # note multiplying by 100 to return to percentage form
+                                before = befcurve(maturity) * 100
+                                after = aftcurve(maturity) * 100
+                                di = after - before
+
+                            elif thisdict['yctype'] == 'wi':
+                                if '_' in name:
+                                    # this would work with y01_y03
+                                    lowermat = getsinglemat(name.split('_')[0])
+                                    uppermat = getsinglemat(name.split('_')[1])
+                                else:
+                                    # this would work with y01y03
+                                    lowermat = getsinglemat(name[0: 3])
+                                    uppermat = getsinglemat(name[3: 6])
+
+                                # keep only maturities in window
+                                keepjs = []
+                                for j in range(len(befrates)):
+                                    if mats[j] >= lowermat and mats[j] <= uppermat:
+                                        keepjs.append(j)
+                                befrates2 = [befrates[j] for j in keepjs]
+                                aftrates2 = [aftrates[j] for j in keepjs]
+                                ids2 = [ids[j] for j in keepjs]
+                                mats2 = [mats[j] for j in keepjs]
+                                names2 = [names[j] for j in keepjs]
+                                sources2 = [sources[j] for j in keepjs]
+
+                                if len(befrates2) == 0:
+                                    continue
+
+                                # stop if no values
+                                # before/after computation
+                                # take mean in case multiple sources
+                                before = np.mean(befrates2)
+                                after = np.mean(aftrates2)
+                                di = after - before
+
+                            else:
+                                raise ValueError('yctype not defined correctly: ' + thisdict['yctype'] + '.')
+
+                            # add to lists
+                            outdict[outputprefix + '_0_' + name2][i] = before
+                            outdict[outputprefix + '_1_' + name2][i] = after
+                            outdict[outputprefix + '_d_' + name2][i] = di
+
+                            if thisdict['yctype'] in ['na', 'wi'] and thisdict['addinfovars'] is True:
+                                outdict[outputprefix + '_i_r0_' + name2][i] = befrates2
+                                outdict[outputprefix + '_i_r1_' + name2][i] = aftrates2
+                                outdict[outputprefix + '_i_i_' + name2][i] = ids2
+                                outdict[outputprefix + '_i_m_' + name2][i] = mats2
+                                outdict[outputprefix + '_i_n_' + name2][i] = names2
+                                outdict[outputprefix + '_i_s_' + name2][i] = sources2
+
+    # combine into dataframe
+    dfout = pd.DataFrame(outdict, dfprocessed.index)
+
+    dfout = dfout.sort_index(axis = 1)
+
+    return(dfout)
+
+
+def forwarddiff(df, prefix, start, end):
+    """
+    Returns the annual change in the forward part of the curve
+
+    Input:
+    - dataset
+    - prefix: yc_20m_ea_ns
+    - ycnamestart: y01 (for ns), y00y02 (for wi)
+    - ycnameend: y11 (for ns), y07y13 (for wi)
+    Output:
+    - yc_20m_ea_ns_d_y01_y11 or yc_1h_ea_wi_d_y00y02_y07y13
+
     Structure of difference variable
     ycdi__m1h_1h__fdi__YCNAME1__YCNAME2
     prefix = 'ycdi__m1h_1h'
@@ -1105,115 +989,54 @@ def forwarddiff(df, prefix, ycnamestart, ycnameend):
     ycnameend = 'nslu__y05'
     """
 
-    # get maturity of start:{{{
-    if ycnamestart.startswith('ridge'):
-        matlowpart = ycnamestart.split('__')[1].split('_')[0]
-        mathighpart = ycnamestart.split('__')[1].split('_')[1]
+    yctype = prefix.split('_')[3]
+    if yctype not in ['ns', 'wi']:
+        raise ValueError('yctype misspecified: ' + str(yctype) + '.')
 
-        matlowletter = matlowpart[0]
-        mathighletter = mathighpart[0]
+    # verify ycnamestart and ycnameend have correct numbers of letters
+    if yctype == 'wi':
+        if len(start) != 6:
+            raise ValueError('For wi, start should have 6 letters: ' + start + '.')
+        if len(end) != 6:
+            raise ValueError('For wi, end should have 6 letters: ' + end + '.')
+    elif yctype == 'ns':
+        if len(start) != 3:
+            raise ValueError('For ns, start should have 6 letters: ' + start + '.')
+        if len(end) != 3:
+            raise ValueError('For wi, end should have 3 letters: ' + end + '.')
+    else:
+        raise ValueError('yctype misspecified: ' + yctype + '.')
 
-        if matlowpart[1: ].isnumeric() is False:
-            raise ValueError("matlowpart fails as latter part not numeric: " + str(ycnamestart) + ".")
-        matlow = int(matlowpart[1: ])
+    # get maturity of start
+    if yctype == 'wi':
+        matlowpart = start[0: 3]
+        mathighpart = start[3: 6]
 
-        if mathighpart[1: ].isnumeric() is False:
-            raise ValueError("mathighpart fails as latter part not numeric: " + str(ycnamestart) + ".")
-        mathigh = int(mathighpart[1: ])
-
-        if matlowletter in ['y', 'z']:
-            None
-        elif matlowletter == 'm':
-            matlow = matlow / 12
-        elif matlowletter == 'd':
-            matlow = matlow / 365
-        else:
-            raise ValueError('Wrong format of matlowletter: ' + ycnamestart + '.')
-
-        if mathighletter in ['y', 'z']:
-            None
-        elif mathighletter == 'm':
-            mathigh = mathigh / 12
-        elif mathighletter == 'd':
-            mathigh = mathigh / 365
-        else:
-            raise ValueError('Wrong format of mathighletter: ' + ycnamestart + '.')
+        matlow = getsinglemat(matlowpart)
+        mathigh = getsinglemat(mathighpart)
 
         matstart = (matlow + mathigh) / 2
-
     elif ycnamestart.startswith('nslu'):
-
-        matpart = ycnamestart.split('__')[1]
-        matstartletter = matpart[0]
-        matstart = int(matpart[1: ])
-
-        if matstartletter in ['y', 'z']:
-            None
-        elif matstartletter == 'm':
-            matstart = matstart / 12
-        elif matstartletter == 'd':
-            matstart = matstart / 365
-        else:
-            raise ValueError('Wrong format of matstartletter: ' + ycnamestart + '.')
+        matstart = getsinglemat(start)
     else:
-        raise ValueError('ycnamestart misspecified: ' + ycnamestart + '.')
-    # get maturity of start:}}}
+        raise ValueError('yctype misspecified: ' + yctype + '.')
 
-    # get maturity of end:{{{
-    if ycnameend.startswith('ridge'):
-        matlowpart = ycnameend.split('__')[1].split('_')[0]
-        mathighpart = ycnameend.split('__')[1].split('_')[1]
+    # get maturity of end
+    if yctype == 'wi':
+        matlowpart = end[0: 3]
+        mathighpart = end[3: 6]
 
-        matlowletter = matlowpart[0]
-        mathighletter = mathighpart[0]
-
-        if matlowpart[1: ].isnumeric() is False:
-            raise ValueError("matlowpart fails as latter part not numeric: " + str(ycnameend) + ".")
-        matlow = int(matlowpart[1: ])
-
-        if mathighpart[1: ].isnumeric() is False:
-            raise ValueError("mathighpart fails as latter part not numeric: " + str(ycnameend) + ".")
-        mathigh = int(mathighpart[1: ])
-
-        if matlowletter in ['y', 'z']:
-            None
-        elif matlowletter == 'm':
-            matlow = matlow / 12
-        elif matlowletter == 'd':
-            matlow = matlow / 365
-        else:
-            raise ValueError('Wrong format of matlowletter: ' + ycnameend + '.')
-
-        if mathighletter in ['y', 'z']:
-            None
-        elif mathighletter == 'm':
-            mathigh = mathigh / 12
-        elif mathighletter == 'd':
-            mathigh = mathigh / 365
-        else:
-            raise ValueError('Wrong format of mathighletter: ' + ycnameend + '.')
+        matlow = getsinglemat(matlowpart)
+        mathigh = getsinglemat(mathighpart)
 
         matend = (matlow + mathigh) / 2
-
-    elif ycnameend.startswith('nslu'):
-
-        matpart = ycnameend.split('__')[1]
-        matendletter = matpart[0]
-        matend = int(matpart[1: ])
-
-        if matendletter in ['y', 'z']:
-            None
-        elif matendletter == 'm':
-            matend = matend / 12
-        elif matendletter == 'd':
-            matend = matend / 365
-        else:
-            raise ValueError('Wrong format of matendletter: ' + ycnameend + '.')
+    elif ycnameend.endswith('nslu'):
+        matend = getsinglemat(end)
     else:
-        raise ValueError('ycnameend misspecified: ' + ycnameend + '.')
-    # get maturity of end:}}}
+        raise ValueError('yctype misspecified: ' + yctype + '.')
 
-    df[prefix + '__fdi__' + ycnamestart + '__' + ycnameend] = (matend * df[prefix + '__di__' + ycnameend] - matstart * df[prefix + '__di__' + ycnamestart]) / (matend - matstart)
+
+    df[prefix + '_fd_' + start + '_' + end] = (matend * df[prefix + '_d_' + end] - matstart * df[prefix + '_d_' + start]) / (matend - matstart)
     
     return(df)
 
@@ -1223,31 +1046,43 @@ def forwarddiff_varname(df, varnames):
         varnames = [varnames]
 
     for varname in varnames:
-        prefix = '__'.join(varname.split('__')[0: 2])
-        ycnamestart = '__'.join(varname.split('__')[3: 5])
-        ycnameend = '__'.join(varname.split('__')[5: 7])
+        prefix = '_'.join(varname.split('_')[0: 4])
+        if varname.split('_')[4] != 'fd':
+            raise ValueError('Fifth part of varname should be fd for forwarddif_varname.')
+        ycnamestart = varname.split('_')[5]
+        ycnameend = varname.split('_')[6]
         df = forwarddiff(df, prefix, ycnamestart, ycnameend)
 
     return(df)
 
 
 def forwarddiff_test():
-    df = pd.DataFrame({'ycdi__m1h_1h__di__ridge__y00_y02': [0.1, 0.2], 'ycdi__m1h_1h__di__ridge__y01_y03': [0.2, 0.3]})
-    df = forwarddiff(df, 'ycdi__m1h_1h', 'ridge__y00_y02', 'ridge__y01_y03')
+    df = pd.DataFrame({'yc_m1h1h_ea_wi_d_y00y02': [0.1, 0.2], 'yc_m1h1h_ea_wi_d_y01y03': [0.2, 0.3]})
+    df = forwarddiff(df, 'yc_m1h1h_ea_wi', 'y00y02', 'y01y03')
     """
-    Should find 0.3 for first row
+    Should find 0.3 for first row and 0.4 for second row
     (0.2 * 2 - 0.1 * 1) / (2 - 1) = 0.3
+    (0.3 * 2 - 0.2 * 1) / (2 - 1) = 0.4
     """
-    print(df)
+    df['ans'] = [0.3, 0.4]
+    df2 = df[df['yc_m1h1h_ea_wi_fd_y00y02_y01y03'] - df['ans'] > 1e-5]
+    if len(df2) > 0:
+        print(df2)
+        raise ValueError('forwarddiff_test failed')
 
     # same but with the _varname version of the function
-    df = pd.DataFrame({'ycdi__m1h_1h__di__ridge__y00_y02': [0.1, 0.2], 'ycdi__m1h_1h__di__ridge__y01_y03': [0.2, 0.3]})
-    df = forwarddiff_varname(df, 'ycdi__m1h_1h__fdi__ridge__y00_y02__ridge__y01_y03')
+    df = pd.DataFrame({'yc_m1h1h_ea_wi_d_y00y02': [0.1, 0.2], 'yc_m1h1h_ea_wi_d_y01y03': [0.2, 0.3]})
+    df = forwarddiff_varname(df, 'yc_m1h1h_ea_wi_fd_y00y02_y01y03')
     """
-    Should find 0.3 for first row
+    Should find 0.3 for first row and 0.4 for second row
     (0.2 * 2 - 0.1 * 1) / (2 - 1) = 0.3
+    (0.3 * 2 - 0.2 * 1) / (2 - 1) = 0.4
     """
-    print(df)
+    df['ans'] = [0.3, 0.4]
+    df2 = df[df['yc_m1h1h_ea_wi_fd_y00y02_y01y03'] - df['ans'] > 1e-5]
+    if len(df2) > 0:
+        print(df2)
+        raise ValueError('forwarddiff_test failed')
 
 
 def graphycfit(df, timeframe, zone, time, timevar, nsluyears = None, plotshow = False, savename = None, ridgerange = None, includeafter = True, xlim = None, ylim = None):
@@ -1350,7 +1185,7 @@ def graphycfit(df, timeframe, zone, time, timevar, nsluyears = None, plotshow = 
 
 
 # Long to Wide Interest Rates for Many Zones/Same Dates:{{{1
-def getdomestic_fromlong(dflong, dfdates, datevar):
+def getdomestic_fromlong(dflong, dfdates, datevar, suffix = 'd'):
     """
     dfdates gives a list of the dates associated with each zone, so it contains a 'zone' and a datevar variable
     We then restrict dflong to only the dates associated with each zone
@@ -1358,10 +1193,14 @@ def getdomestic_fromlong(dflong, dfdates, datevar):
 
     dfdomestic = dflong.merge(dfdates[['zone', datevar]], on = ['zone', datevar], how = 'right')
 
+    # rename
+    dfdomestic = dfdomestic.set_index(['zone', datevar])
+    dfdomestic = dfdomestic.rename({col: col.split('_')[0] + suffix + '_' + '_'.join(col.split('_')[1: ]) for col in dfdomestic.columns}, axis = 1, errors = 'raise')
+
     return(dfdomestic)
 
 
-def getforeign_fromlong(dflong, dfdates, datevar, zonesinclude = None, suffix = 'for'):
+def getforeign_fromlong(dflong, dfdates, datevar, zonesinclude = None, suffix = 'f'):
     """
     This computes the global mean excluding the local zone for variables around the mean
     All the variables in dfdates except 'zone' and datevar must be floats
@@ -1394,12 +1233,12 @@ def getforeign_fromlong(dflong, dfdates, datevar, zonesinclude = None, suffix = 
         # get all columns relating to a given varname
         dfwide2 = dfwide[[col for col in dfwide.columns if '__'.join(col.split('__')[: -1]) == varname]]
         # define a single global varname for that variable
-        dfglobal[varname.split('__')[0] + '_' + suffix + '__' + '__'.join(varname.split('__')[1: ])] = dfwide2.mean(axis = 1)
+        dfglobal[varname.split('_')[0] + suffix + '_' + '_'.join(varname.split('_')[1: ])] = dfwide2.mean(axis = 1)
 
     return(dfglobal)
 
 
-def getzones_fromlong(dflong, datevar, dfdates = None, zonesinclude = None):
+def getzones_fromlong(dflong, datevar, dfdates = None, zonesinclude = None, suffix = 'z'):
     """
     df should be a dataset where I have zones covering the same dates/times where dates/times are given by datevar
 
@@ -1414,7 +1253,11 @@ def getzones_fromlong(dflong, datevar, dfdates = None, zonesinclude = None):
     # reshape to long
     dfwide = pd.pivot(dflong, index = datevar, columns = 'zone', values = [col for col in dflong.columns if col not in['zone', datevar]])
 
-    dfwide.columns = [col[0].split('__')[0] + '_zone_' + col[1].lower() + '__' + '__'.join(col[0].split('__')[1: ]) for col in dfwide.columns]
+    # add suffix to first part of name
+    if suffix is not None:
+        dfwide.columns = [col[0].split('_')[0] + 'z' + col[1].lower() + '_' + '_'.join(col[0].split('_')[1: ]) for col in dfwide.columns]
+
+    # get index back
     dfwide = dfwide.reset_index()
 
     # if there are object dtypes in pandas pivot seems to make all variables object afterwards
@@ -1429,3 +1272,11 @@ def getzones_fromlong(dflong, datevar, dfdates = None, zonesinclude = None):
     return(dfwide)
 
 
+# Overall:{{{1
+def testall():
+    forwarddiff_test()
+
+
+# Run:{{{1
+if __name__ == "__main__":
+    testall()
