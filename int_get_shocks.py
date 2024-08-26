@@ -549,6 +549,9 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
     if printdetails is True:
         print(str(datetime.datetime.now()) + ' Started getbondshocks_yc.')
 
+    # make deepcopy of inputlist to avoid issues if I reuse the list
+    inputlist = copy.deepcopy(inputlist)
+
     # get list of prefixes for processed bonds
     # for example: eout__ycdi__m1c_1c
     prefixes = sorted(list(set(['__'.join(col.split('__')[0: 3]) for col in dfprocessed.columns])))
