@@ -541,11 +541,14 @@ def getindividualbonds(df):
     return(df2)
 
     
-def getbondshocks_yc(dfprocessed, inputlist):
+def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
     """
     Take the output of getbondshocks_process and get yield curves based on inputlist
     inputlist is a list of dictionaries each defining a measure to construct
     """
+    if printdetails is True:
+        print(str(datetime.datetime.now()) + ' Started getbondshocks_yc.')
+
     # get list of prefixes for processed bonds
     # for example: eout__ycdi__m1c_1c
     prefixes = sorted(list(set(['__'.join(col.split('__')[0: 3]) for col in dfprocessed.columns])))
@@ -559,6 +562,9 @@ def getbondshocks_yc(dfprocessed, inputlist):
     nspossibleval = ['ns', 'ns1', 'ns2', 'ns3', 'ns4', 'ns5']
 
     # adjust input dicts:{{{
+    # if inputted single dict, adjust to be a list
+    if isinstance(inputlist, dict):
+        inputlist = [inputlist]
 
     # go through inputlist initially
     for i, thisdict in enumerate(inputlist):
@@ -668,6 +674,8 @@ def getbondshocks_yc(dfprocessed, inputlist):
 
     # go through columns one at a time
     for thisdict in inputlist:
+        if printdetails is True:
+            print(str(datetime.datetime.now()) + ' getbondshocks_yc: Started ' + str(thisdict) + '.')
         for bondtype in thisdict['bondtype']:
             for timeframe in thisdict['timeframe']:
                 for outtype in thisdict['outtype']:
@@ -966,6 +974,9 @@ def getbondshocks_yc(dfprocessed, inputlist):
     dfout = pd.DataFrame(outdict, dfprocessed.index)
 
     dfout = dfout.sort_index(axis = 1)
+
+    if printdetails is True:
+        print(str(datetime.datetime.now()) + ' Finished getbondshocks_yc.')
 
     return(dfout)
 
