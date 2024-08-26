@@ -623,7 +623,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
             # verify bondtypes specified are available
             for bondtype in thisdict['bondtype']:
                 if bondtype not in bondtypes:
-                    raise ValueError('Specified bondtype not in list of bondtypes: Bond type: ' + bondtype + '. Timeframes: ' + str(bondtypes) + '.')
+                    raise ValueError('Specified bondtype not in list of bondtypes: Specified bond type: ' + bondtype + '. Available bondtypes: ' + str(bondtypes) + '.')
 
         # which timeframes cover
         if 'timeframe' not in thisdict:
