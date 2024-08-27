@@ -516,7 +516,7 @@ def getindividualbonds(df):
                 # replace z_deu_ref with zdeuref
                 source = sources[i][j].replace('_', '')
 
-                befname = 'yc_' + timeframe + '_' + outliertype + source + '_0_na_' + names[i][j]
+                befname = ycpart + '_' + timeframe + '_' + outliertype + source + '_0_na_' + names[i][j]
             
                 outdict[befname] = [befrates[i][j]]
                 outdict[befname.replace('_0_', '_1_')] = [aftrates[i][j]]
