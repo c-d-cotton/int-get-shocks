@@ -276,7 +276,7 @@ def getbondshocks_process(df):
         # ycdi__m1c_1c
         prefix_nonsource = '__'.join(prefix.split('__')[1: ])
 
-        if 'iout__' + prefix_nonsource in dfout.columns:
+        if 'iout__' + prefix_nonsource + '__befrate' in dfout.columns:
             # need to add this source to existing lists
             befrates_out = list(dfout['iout__' + prefix_nonsource + '__befrate'])
             aftrates_out = list(dfout['iout__' + prefix_nonsource + '__aftrate'])
