@@ -516,13 +516,14 @@ def getindividualbonds(df):
                 # replace z_deu_ref with zdeuref
                 source = sources[i][j].replace('_', '')
 
-                befname = ycpart + '_' + timeframe + '_' + outliertype + source + '_0_na_' + names[i][j]
+                first3parts = ycpart + '_' + timeframe + '_' + outliertype + source + '_'
+                last2parts = '_na_' + names[i][j]
             
-                outdict[befname] = [befrates[i][j]]
-                outdict[befname.replace('_0_', '_1_')] = [aftrates[i][j]]
-                outdict[befname.replace('_0_', '_d_')] = [aftrates[i][j] - befrates[i][j]]
-                outdict[befname.replace('_0_', '_m_')] = [mats[i][j]]
-                outdict[befname.replace('_0_', '_id_')] = [ids[i][j]]
+                outdict[first3parts + '0' + last2parts] = [befrates[i][j]]
+                outdict[first3parts + '1' + last2parts] = [aftrates[i][j]]
+                outdict[first3parts + 'd' + last2parts] = [aftrates[i][j] - befrates[i][j]]
+                outdict[first3parts + 'm' + last2parts] = [mats[i][j]]
+                outdict[first3parts + 'id' + last2parts] = [ids[i][j]]
 
             dfrow = pd.DataFrame(outdict)
             rowstoconcat.append(dfrow)
