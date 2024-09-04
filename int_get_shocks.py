@@ -313,9 +313,8 @@ def getbondshocks_process(df):
         
     # merge columns together to get iout:}}}
 
-    # remove outliers to get eout:{{{
-    # something like ycdi__m1c_1c
     prefix_nonsources = ['__'.join(col.split('__')[1: -1]) for col in dfout.columns]
+    # basic checks and reorder iout:{{{
     for prefix_nonsource in prefix_nonsources:
         befrates = list(dfout['iout__' + prefix_nonsource + '__befrate'])
         aftrates = list(dfout['iout__' + prefix_nonsource + '__aftrate'])
@@ -365,6 +364,27 @@ def getbondshocks_process(df):
             names[i] = [names[i][j] for j in list(matsorder)]
             sources[i] = [sources[i][j] for j in list(matsorder)]
 
+        dfout['iout__' + prefix_nonsource + '__befrate'] = befrates
+        dfout['iout__' + prefix_nonsource + '__aftrate'] = aftrates
+        dfout['iout__' + prefix_nonsource + '__mat'] = mats
+        dfout['iout__' + prefix_nonsource + '__id'] = ids
+        dfout['iout__' + prefix_nonsource + '__name'] = names
+        dfout['iout__' + prefix_nonsource + '__source'] = sources
+    # basic checks and reorder iout:}}}
+
+    # remove outliers to get eout:{{{
+    # something like ycdi__m1c_1c
+    for prefix_nonsource in prefix_nonsources:
+        befrates = list(dfout['iout__' + prefix_nonsource + '__befrate'])
+        aftrates = list(dfout['iout__' + prefix_nonsource + '__aftrate'])
+        ids = list(dfout['iout__' + prefix_nonsource + '__id'])
+        mats = list(dfout['iout__' + prefix_nonsource + '__mat'])
+        names = list(dfout['iout__' + prefix_nonsource + '__name'])
+        sources = list(dfout['iout__' + prefix_nonsource + '__source'])
+
+        # now go through and replace rates/maturities accordingly
+        for i in range(len(befrates)):
+            
             # drop i,j if it is an outlier:{{{
             # drop outliers by comparing change in before and after for different maturities
             # need to remove null values beforehand so can compute comparisonchange
@@ -683,7 +703,6 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
         for bondtype in thisdict['bondtype']:
             for timeframe in thisdict['timeframe']:
                 for outtype in thisdict['outtype']:
-                    # ADD NELSON SIEGEL HERE!!!
 
                     inputprefix = outtype + 'out__' + bondtype + '__' + timeframe
 
@@ -702,7 +721,8 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                         bondtype2 = 'l'
                     else:
                         raise ValueError('bondtype should be in ycdi or ycdi_il.')
-                    # replace hyphens in source i.e. z_deu_ref becomes zdeuref
+                    # replace underscores in source i.e. z_deu_ref becomes zdeuref
+                    # note I also remove underscores from the processed bond sources below
                     source = thisdict['source'].replace('_', '')
                     # first four parts (plus last hyphen) of output name
                     outputprefix = 'y' + bondtype2 + '_' + timeframe.replace('_', '') + '_' + outtype + source + '_' + thisdict['yctype']
@@ -732,8 +752,6 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                         # always add parameters for ns
                         outdict[outputprefix + '_i_p0'] = [np.nan] * len(dfprocessed)
                         outdict[outputprefix + '_i_p1'] = [np.nan] * len(dfprocessed)
-                        # always output rank for ns
-                        outdict[outputprefix + '_i_rk'] = [np.nan] * len(dfprocessed)
 
                         # if yctype is na or wi add info for overall bond
                         if thisdict['addinfovars'] is True:
@@ -743,6 +761,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                             outdict[outputprefix + '_i_m'] = [np.nan] * len(dfprocessed)
                             outdict[outputprefix + '_i_n'] = [np.nan] * len(dfprocessed)
                             outdict[outputprefix + '_i_s'] = [np.nan] * len(dfprocessed)
+                            outdict[outputprefix + '_i_rk'] = [np.nan] * len(dfprocessed)
 
                     # go through one row of columns at a time
                     for i in range(len(dfprocessed)):
@@ -756,6 +775,9 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                         names = names_list[i]
                         sources = sources_list[i]
 
+                        # remove underscores from source to match the adjusted source names
+                        sources = [source.replace('_', '') for source in sources]
+
                         # continue if no data for this row
                         if isinstance(befrates, list) is False and pd.isnull(befrates):
                             continue
@@ -764,8 +786,9 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                         keepjs = []
                         existingids = []
                         for j in range(len(befrates)):
-                            if (thisdict['source'] in ['a', 'b'] or sources[j] == thisdict['source']) and ids[j] not in existingids:
+                            if (thisdict['source'] in ['a', 'b'] or sources[j] == thisdict['source']) and (pd.isnull(ids[j]) or ids[j] not in existingids):
                                 keepjs.append(j)
+                                existingids.append(ids[j])
 
                         # adjust lists keeping relevant sources/ids
                         befrates = [befrates[j] for j in keepjs]
