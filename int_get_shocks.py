@@ -583,7 +583,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
     # for example ['m1c_1c', 'm1c_1o']
     timeframes = sorted(list(set([col.split('__')[2] for col in dfprocessed.columns])))
 
-    nspossibleval = ['ns', 'ns1', 'ns2', 'ns3', 'ns4', 'ns5']
+    nspossibleval = ['ns', 'ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6']
 
     # adjust input dicts:{{{
     # if inputted single dict, adjust to be a list
@@ -611,7 +611,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                 thisdict['name'] = ['m06', 'y01', 'y02', 'y03', 'y04', 'y05', 'y07', 'y10', 'y15']
         else:
             # yctype should be in one of this list
-            raise ValueError('yctype misdefined: ' + yctype + '.')
+            raise ValueError('yctype misdefined: ' + thisdict['yctype'] + '.')
 
         if 'name' not in thisdict:
             if thisdict['yctype'] == 'na':
