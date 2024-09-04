@@ -775,12 +775,12 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                         names = names_list[i]
                         sources = sources_list[i]
 
-                        # remove underscores from source to match the adjusted source names
-                        sources = [source.replace('_', '') for source in sources]
-
                         # continue if no data for this row
                         if isinstance(befrates, list) is False and pd.isnull(befrates):
                             continue
+
+                        # remove underscores from source to match the adjusted source names
+                        sources = [source.replace('_', '') for source in sources]
 
                         # which points keep generally
                         keepjs = []
