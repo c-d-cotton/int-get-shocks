@@ -159,7 +159,7 @@ def getrelativedates_test():
     print('dropped = ' + getrelativedates(['20211128d'], 0, weekendignore = True)[0])
 
 
-def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayignore = False, ffill = False, bfill = False, eventtimes = None, eventtimebefore = False, eventtimeafter = False, startofday = False):
+def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayignore = False, ffill = False, bfill = False, ffillfirst = False, eventtimes = None, eventtimebefore = False, eventtimeafter = False, startofday = False):
     """
 
     Main inputs:
@@ -181,11 +181,19 @@ def getdfdailyrel_single(df, eventdates, rday, weekendignore = False, holidayign
     If eventtime is not known then can specify np.nan and will be ignored
     eventtimebefore and eventtimeafter in format 1410M
     eventtimes in format either 1410M or 20210101_1410M
+    ffillfirst specifies whether do ffill or bfill first if do both
     """
-    if ffill is not False:
-        df = df.ffill(limit = ffill)
-    if bfill is not False:
-        df = df.bfill(limit = bfill)
+    if ffillfirst is True:
+        if ffill is not False:
+            df = df.ffill(limit = ffill)
+        if bfill is not False:
+            df = df.bfill(limit = bfill)
+    else:
+        if bfill is not False:
+            df = df.bfill(limit = bfill)
+        if ffill is not False:
+            df = df.ffill(limit = ffill)
+        
 
     # get relativedays
     relativedates = getrelativedates(eventdates, rday, weekendignore = weekendignore, holidayignore = holidayignore, startofday = startofday)
@@ -346,6 +354,7 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
     Minor options:
     - I also allow weekendignore/holidayignore inputs to the function in case I want to vary this by zone.
     - fillgaps: Automatically sort and fill gaps in data. Filling gaps only needed with ffill/bfill. No cost to doing this other than time. Can turn off if I want to save time though I think it's probably not going to take long in general.
+    - ffillfirst: If both ffill and bfill are specified do ffill first if this is True (default is False)
     }}}"""
 
     # basic checks on reldict:{{{
@@ -370,6 +379,8 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
             singledict['ffill'] = False
         if 'bfill' not in singledict:
             singledict['bfill'] = False
+        if 'ffillfirst' not in singledict:
+            singledict['ffillfirst'] = False
         if 'eventtimebefore' not in singledict:
             singledict['eventtimebefore'] = False
         if 'eventtimeafter' not in singledict:
@@ -400,7 +411,7 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
         else:
             df = dfclose
 
-        dfrel, relativedates = getdfdailyrel_single(df, eventdates, reldict[shockname]['rday'], weekendignore = reldict[shockname]['weekendignore'], holidayignore = reldict[shockname]['holidayignore'], ffill = reldict[shockname]['ffill'], bfill = reldict[shockname]['bfill'], eventtimes = reldict[shockname]['eventtimes'], eventtimebefore = reldict[shockname]['eventtimebefore'], eventtimeafter = reldict[shockname]['eventtimeafter'], startofday = reldict[shockname]['open'])
+        dfrel, relativedates = getdfdailyrel_single(df, eventdates, reldict[shockname]['rday'], weekendignore = reldict[shockname]['weekendignore'], holidayignore = reldict[shockname]['holidayignore'], ffill = reldict[shockname]['ffill'], bfill = reldict[shockname]['bfill'], ffillfirst = reldict[shockname]['ffillfirst'], eventtimes = reldict[shockname]['eventtimes'], eventtimebefore = reldict[shockname]['eventtimebefore'], eventtimeafter = reldict[shockname]['eventtimeafter'], startofday = reldict[shockname]['open'])
 
         reldict[shockname]['dfrel'] = dfrel
         reldict[shockname]['relativedates'] = relativedates
@@ -553,7 +564,7 @@ def get_eventtimes_index_test():
     print('[1, 3] = ' + str( get_eventtimes_index(df, eventtimes) ))
 
 
-def getdfintrarel_single(df, eventtimes, rpos, ffill = False, bfill = False, eventtimes_index = None):
+def getdfintrarel_single(df, eventtimes, rpos, ffill = False, bfill = False, ffillfirst = False, eventtimes_index = None):
     """
     df = pandas dataframe of intraday data
     MUST NOT HAVE GAPS since I'm searching by iloc (unlike the daily case)
@@ -567,10 +578,16 @@ def getdfintrarel_single(df, eventtimes, rpos, ffill = False, bfill = False, eve
 
     Note that we do not fill in any missing gaps that don't exist in the data
     """
-    if ffill is not False:
-        df = df.ffill(limit = ffill)
-    if bfill is not False:
-        df = df.bfill(limit = bfill)
+    if ffillfirst is True:
+        if ffill is not False:
+            df = df.ffill(limit = ffill)
+        if bfill is not False:
+            df = df.bfill(limit = bfill)
+    else:
+        if bfill is not False:
+            df = df.bfill(limit = bfill)
+        if ffill is not False:
+            df = df.ffill(limit = ffill)
 
     if eventtimes_index is None:
         eventtimes_index = get_eventtimes_index(df, eventtimes, missingbetweenerror = True)
@@ -747,6 +764,8 @@ def getdfintrarel_reldict(dfclose, eventtimes, reldict, yearlist = None, dfopen 
             singledict['bfill'] = False
         if 'ffill' not in singledict:
             singledict['ffill'] = False
+        if 'ffillfirst' not in singledict:
+            singledict['ffillfirst'] = False
         if 'open' not in singledict:
             singledict['open'] = False
 
@@ -761,7 +780,7 @@ def getdfintrarel_reldict(dfclose, eventtimes, reldict, yearlist = None, dfopen 
         dfrellist = []
         eventtimes_relative = []
         for i in range(len(dfcloselist)):
-            dfrel_i, eventtimes_relative_i = getdfintrarel_single(dfthislist[i], eventtimes_list[i], singledict['rpos'], ffill = singledict['ffill'], bfill = singledict['bfill'], eventtimes_index = eventtimes_index_list[i])
+            dfrel_i, eventtimes_relative_i = getdfintrarel_single(dfthislist[i], eventtimes_list[i], singledict['rpos'], ffill = singledict['ffill'], bfill = singledict['bfill'], ffillfirst = singledict['ffillfirst'], eventtimes_index = eventtimes_index_list[i])
 
             dfrellist.append(dfrel_i)
             eventtimes_relative = eventtimes_relative + eventtimes_relative_i

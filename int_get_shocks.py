@@ -229,7 +229,7 @@ def getranking(mats):
         raise ValueError('matsrank2 will not work properly since too many maturities available.')
     matsrank2 = str(len(mats_max15)).zfill(4)
 
-    overallrank = int(matsrank + matsrank2)
+    overallrank = float(matsrank + '.' + matsrank2)
 
     return(overallrank)
 
@@ -839,7 +839,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                             # only need to do once for each row
 
                             # verify ranking is high enough for nelson-siegel
-                            if thisrank < 10000:
+                            if thisrank < 1:
                                 continue
 
                             success = False
