@@ -17,6 +17,7 @@ except NameError:
 import copy
 import datetime
 from nelson_siegel_svensson.calibrate import calibrate_ns_ols
+from nelson_siegel_svensson.calibrate import NelsonSiegelCurve
 import numpy as np
 import pandas as pd
 import pickle
@@ -1008,6 +1009,63 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
     return(dfout)
 
 
+# Post-Processing Functions:{{{1
+def getaltnsmat(df, ycstem, maturity):
+    """
+    Take the parameters from the Nelson-Siegel approach and construct before/after/difference values for alternative maturities
+
+    df is the dataframe
+    ycstem is the first four parts i.e. yc_30m_ea_ns
+    maturity is y09
+
+    getaltnsmat(df, 'yc_30m_ea_ns', 'y09') would create yc_30m_ea_ns_0_y09, yc_30m_ea_ns_1_y09, yc_30m_ea_ns_d_y09 using yc_30m_ea_ns_i_p0 and yc_30m_ea_ns_i_p1
+    """
+
+    if ycstem + '_i_p0' not in df.columns:
+        raise ValueError('getaltnsmat requires ' + ycstem + '_i_p0 to be defined')
+    if ycstem + '_i_p1' not in df.columns:
+        raise ValueError('getaltnsmat requires ' + ycstem + '_i_p1 to be defined')
+
+    maturityval = getsinglemat(maturity)
+
+    befcurves = list(df[ycstem + '_i_p0'])
+    aftcurves = list(df[ycstem + '_i_p1'])
+
+    befvals = [np.nan] * len(befcurves)
+    aftvals = [np.nan] * len(befcurves)
+    divals = [np.nan] * len(befcurves)
+
+    for i in range(len(befcurves)):
+        befcurve = befcurves[i]
+        aftcurve = aftcurves[i]
+
+        if pd.isnull(befcurve) or pd.isnull(aftcurve):
+            continue
+
+        # evaluate curves to convert from string to list
+        befcurve = eval(befcurve)
+        aftcurve = eval(aftcurve)
+
+        # convert back into curves (rather than just parameters)
+        befcurve = NelsonSiegelCurve(befcurve[0], befcurve[1], befcurve[2], befcurve[3])
+        aftcurve = NelsonSiegelCurve(aftcurve[0], aftcurve[1], aftcurve[2], aftcurve[3])
+
+        # get values for relevant maturities
+        # note multiplying by 100 to return to percentage form
+        before = befcurve(maturityval) * 100
+        after = aftcurve(maturityval) * 100
+        di = after - before
+
+        # adjust
+        befvals[i] = before
+        aftvals[i] = after 
+        divals[i] = di 
+
+    df[ycstem + '_0_' + maturity] = befvals
+    df[ycstem + '_1_' + maturity] = aftvals
+    df[ycstem + '_d_' + maturity] = divals
+
+
 def forwarddiff(df, prefix, start, end):
     """
     Returns the annual change in the forward part of the curve
@@ -1018,7 +1076,7 @@ def forwarddiff(df, prefix, start, end):
     - ycnamestart: y01 (for ns), y00y02 (for wi)
     - ycnameend: y11 (for ns), y07y13 (for wi)
     Output:
-    - yc_20m_ea_ns_d_y01_y11 or yc_1h_ea_wi_d_y00y02_y07y13
+    - yc_20m_ea_ns_fd_y01_y11 or yc_1h_ea_wi_fd_y00y02_y07y13
 
     Structure of difference variable
     ycdi__m1h_1h__fdi__YCNAME1__YCNAME2
@@ -1054,7 +1112,7 @@ def forwarddiff(df, prefix, start, end):
         mathigh = getsinglemat(mathighpart)
 
         matstart = (matlow + mathigh) / 2
-    elif ycnamestart.startswith('nslu'):
+    elif yctype == 'ns':
         matstart = getsinglemat(start)
     else:
         raise ValueError('yctype misspecified: ' + yctype + '.')
@@ -1068,10 +1126,15 @@ def forwarddiff(df, prefix, start, end):
         mathigh = getsinglemat(mathighpart)
 
         matend = (matlow + mathigh) / 2
-    elif ycnameend.endswith('nslu'):
+    elif yctype == 'ns':
         matend = getsinglemat(end)
     else:
         raise ValueError('yctype misspecified: ' + yctype + '.')
+
+    if prefix + '_d_' + start not in df.columns:
+        raise ValueError('Missing: ' + prefix + '_d_' + start + '.')
+    if prefix + '_d_' + end not in df.columns:
+        raise ValueError('Missing: ' + prefix + '_d_' + end + '.')
 
 
     df[prefix + '_fd_' + start + '_' + end] = (matend * df[prefix + '_d_' + end] - matstart * df[prefix + '_d_' + start]) / (matend - matstart)
