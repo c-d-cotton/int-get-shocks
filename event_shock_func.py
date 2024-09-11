@@ -448,9 +448,12 @@ def getdfdailyrel_reldict_test(printdetails = False):
 
 
 # Intraday Data Functions:{{{1
-def roundnearestinterval(eventtimes, minutetoroundto):
+def roundnearestinterval(eventtimes, minutetoroundto, minutesadd = 0):
     """
     This rounds a list of eventtimes to the nearest ``minutetoroundto'' i.e. nearest 5 mins
+    I may also add minutes to the amount using minutesadd. I can use this to take floors or ceilings For example:
+    - If I add 2 minutes then 15:56 becomes 15:58 and will then round to 16:00
+    - If I add -2 minutes then 15:59 becomes 15:57 and will then round to 15:55
     """
 
     eventtimes_rounded = [np.nan] * len(eventtimes)
@@ -461,9 +464,10 @@ def roundnearestinterval(eventtimes, minutetoroundto):
             continue
 
         dt = convertmytimetodatetime(eventtime)
-        # add 7 minutes
-        # this means that when take the floor, 15:59 will become 16:06 and rounds down to 16:00
-        dt = dt + datetime.timedelta(minutes = minutetoroundto / 2)
+        # add half the amount I'm rounding to (for example 2.5 minutes in the case of 5 minutes)
+        # this means that when take the floor, 15:59 will become 16:01.5 and rounds down to 16:00
+        # also allow for the possibility of adding minutesadd
+        dt = dt + datetime.timedelta(minutes = minutetoroundto / 2 + minutesadd)
         # take the floor of the minutes component
         dt = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute // minutetoroundto * minutetoroundto)
         mytime = convertdatetimetomytime(dt, 'M')
