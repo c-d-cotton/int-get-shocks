@@ -1066,6 +1066,24 @@ def getaltnsmat(df, ycstem, maturity):
     df[ycstem + '_d_' + maturity] = divals
 
 
+def getaltnsmat(df, varnames):
+    """
+    This does getaltnsmat but where I input a list of varnames of single varname
+    """
+    
+    if isinstance(varnames, str):
+        varnames = [varnames]
+
+    for varname in varnames:
+        if varname in df:
+            continue
+        ycstem = '_'.join(varname.split('_')[0: 4])
+        maturity = varname.split('_')[5]
+        getaltnsmat(df, ycstem, maturity)
+
+    return(df)
+
+
 def forwarddiff(df, prefix, start, end):
     """
     Returns the annual change in the forward part of the curve
@@ -1147,6 +1165,8 @@ def forwarddiff_varname(df, varnames):
         varnames = [varnames]
 
     for varname in varnames:
+        if varname in df:
+            continue
         prefix = '_'.join(varname.split('_')[0: 4])
         if varname.split('_')[4] != 'fd':
             raise ValueError('Fifth part of varname should be fd for forwarddif_varname.')
