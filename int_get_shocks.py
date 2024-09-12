@@ -753,6 +753,8 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                         # always add parameters for ns
                         outdict[outputprefix + '_i_p0'] = [np.nan] * len(dfprocessed)
                         outdict[outputprefix + '_i_p1'] = [np.nan] * len(dfprocessed)
+                        outdict[outputprefix + '_i_me'] = [np.nan] * len(dfprocessed)
+                        outdict[outputprefix + '_i_ml'] = [np.nan] * len(dfprocessed)
 
                         # if yctype is na or wi add info for overall bond
                         if thisdict['addinfovars'] is True:
@@ -874,15 +876,9 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
 
                                 outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
                                 outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
-
+                                outdict[outputprefix + '_i_me'][i] = mats[0]
+                                outdict[outputprefix + '_i_ml'][i] = mats[-1]
                             else:
-                                if False:
-                                    print('\nFailed Nelson-Siegel:')
-                                    print('Col: ' + str(col) + '.')
-                                    print('Index: ' + str(i) + '.')
-                                    print('Maturities: ' + str(mats_max15[i]) + '.')
-                                    print('Yields: ' + str(rates_max15[i]) + '.')
-
                                 continue
                             # getting Nelson-Siegel parameters:}}}
 
@@ -941,6 +937,9 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 # don't worry about doing this for ycdi_for where I've already checked the appropriate bonds to include
                                 earliestmat = mats[0]
                                 if earliestmat > maturity:
+                                    continue
+                                latestmat = mats[-1]
+                                if latestmat < maturity:
                                     continue
 
                                 # check to ensure not defining bad variables:}}}
@@ -1010,13 +1009,14 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
 
 
 # Post-Processing Functions:{{{1
-def getaltnsmat(df, ycstem, maturity):
+def getaltnsmat(df, ycstem, maturity, includeoutsidevals = False):
     """
     Take the parameters from the Nelson-Siegel approach and construct before/after/difference values for alternative maturities
 
     df is the dataframe
     ycstem is the first four parts i.e. yc_30m_ea_ns
     maturity is y09
+    includeoutsidevals is False means I set dates where the earliest/latest maturity of the fixed income instruments available is higher/lower than the maturity I am computing to be nan (in other words I'm computing a maturity that's outside the range of the fixed income instruments I have values for)
 
     getaltnsmat(df, 'yc_30m_ea_ns', 'y09') would create yc_30m_ea_ns_0_y09, yc_30m_ea_ns_1_y09, yc_30m_ea_ns_d_y09 using yc_30m_ea_ns_i_p0 and yc_30m_ea_ns_i_p1
     """
@@ -1030,6 +1030,8 @@ def getaltnsmat(df, ycstem, maturity):
 
     befcurves = list(df[ycstem + '_i_p0'])
     aftcurves = list(df[ycstem + '_i_p1'])
+    earliestmats = list(df[ycstem + '_i_me'])
+    latestmats = list(df[ycstem + '_i_ml'])
 
     befvals = [np.nan] * len(befcurves)
     aftvals = [np.nan] * len(befcurves)
@@ -1038,8 +1040,13 @@ def getaltnsmat(df, ycstem, maturity):
     for i in range(len(befcurves)):
         befcurve = befcurves[i]
         aftcurve = aftcurves[i]
+        earliestmat = earliestmats[i]
+        latestmat = latestmats[i]
 
         if pd.isnull(befcurve) or pd.isnull(aftcurve):
+            continue
+        # drop maturity values which are outside the range of fixed income data I have available
+        if  includeoutsidevals is False and (maturityval < earliestmat or maturityval > latestmat):
             continue
 
         # evaluate curves to convert from string to list
@@ -1066,9 +1073,10 @@ def getaltnsmat(df, ycstem, maturity):
     df[ycstem + '_d_' + maturity] = divals
 
 
-def getaltnsmat(df, varnames):
+def getaltnsmat_varname(df, varnames, includeoutsidevals = False):
     """
     This does getaltnsmat but where I input a list of varnames of single varname
+    Note that I can input yc_30m_ea_ns_0_y03, yc_30m_ea_ns_1_y03, yc_30m_ea_ns_d_y03 and in all cases I will create all three variables
     """
     
     if isinstance(varnames, str):
@@ -1079,7 +1087,7 @@ def getaltnsmat(df, varnames):
             continue
         ycstem = '_'.join(varname.split('_')[0: 4])
         maturity = varname.split('_')[5]
-        getaltnsmat(df, ycstem, maturity)
+        getaltnsmat(df, ycstem, maturity, includeoutsidevals=includeoutsidevals)
 
     return(df)
 
@@ -1204,105 +1212,6 @@ def forwarddiff_test():
     if len(df2) > 0:
         print(df2)
         raise ValueError('forwarddiff_test failed')
-
-
-def graphycfit(df, timeframe, zone, time, timevar, nsluyears = None, plotshow = False, savename = None, ridgerange = None, includeafter = True, xlim = None, ylim = None):
-    """
-    Input df containing:
-    - ycdi__m1h_1h__befrate
-    - ycdi__m1h_1h__aftrate
-    - ycdi__m1h_1h__mat
-    - ycdi__m1h_1h__befrate__nslu__y02 etc.
-    - ycdi__m1h_1h__aftrate__nslu__y02 etc.
-    - zone
-    - timevariable
-
-    If ridgerange is None then plot a nslu graph using nsluyears
-    Otherwise plot a ridge graph. ridgerange = 'y01_y03' etc.
-
-    """
-
-    if ridgerange is None:
-        if nsluyears is None:
-            nsluyears = ['y01', 'y02', 'y03', 'y04', 'y05', 'y06', 'y07', 'y08', 'y09', 'y10', 'y11', 'y12', 'y13', 'y14', 'y15']
-        nslu = True
-    else:
-        if nsluyears is not None:
-            raise ValueError("nsluyears should not be defined if ridgename is not None.")
-        nslu = False
-    
-    # get names of variables I'm interested in
-    name_befrate = 'ycdi__' + timeframe + '__befrate'
-    name_aftrate = 'ycdi__' + timeframe + '__aftrate'
-    name_mat = 'ycdi__' + timeframe + '__mat'
-    if nslu is True:
-        name_befrate_fitteds = ['ycdi__' + timeframe + '__befrate__nslu__' + year for year in nsluyears]
-        name_aftrate_fitteds = ['ycdi__' + timeframe + '__aftrate__nslu__' + year for year in nsluyears]
-    else:
-        name_befrate_fitteds = ['ycdi__' + timeframe + '__befrate__ridge__' + ridgerange]
-        name_aftrate_fitteds = ['ycdi__' + timeframe + '__aftrate__ridge__' + ridgerange]
-
-    # restrict only to relevant time
-    df2 = df[df[timevar] == time]
-    if len(df2) != 1:
-        print(df2)
-        raise ValueError('Not a single time when timevar equals ' + time + '.')
-
-    # get variables for relevant times as lists
-    befrates = df2[name_befrate].iloc[0]
-    aftrates = df2[name_aftrate].iloc[0]
-    mats = df2[name_mat].iloc[0]
-    befrate_fitteds = df2[name_befrate_fitteds].values.tolist()[0]
-    aftrate_fitteds = df2[name_aftrate_fitteds].values.tolist()[0]
-
-    # get maturities for fitteds
-    if nslu is True:
-        mats_fitteds = [year for year in nsluyears]
-        for i in range(len(mats_fitteds)):
-            mats_fitteds[i] = getsinglemat(mats_fitteds[i])
-    else:
-        matbef, mataft = getridgemats(ridgerange)
-        mats_fitteds = [(matbef + mataft) / 2]
-
-    # restrict befrates/aftrates to only show within the ridgerange
-    if nslu is True:
-        matbef = 0
-        mataft = 15
-    else:
-        matbef, mataft = getridgemats(ridgerange)
-    mats_istar = [i for i in range(len(mats)) if mats[i] >= matbef and mats[i] <= mataft]
-    befrates = [befrates[i] for i in mats_istar]
-    aftrates = [aftrates[i] for i in mats_istar]
-    mats = [mats[i] for i in mats_istar]
-
-    if xlim is not None:
-        plt.xlim(xlim)
-    if ylim is not None:
-        plt.ylim(ylim)
-    plt.xlabel('Maturity (Years)')
-    plt.ylabel('Interest Rate (%)')
-
-    if nslu is True:
-        fittedstyle = '-'
-        markersize = 5
-    else:
-        fittedstyle = '_'
-        markersize = 15
-    plt.plot(mats, befrates, 'bo', label = 'Before Underlying')
-    plt.plot(mats_fitteds, befrate_fitteds, 'b' + fittedstyle, markersize = markersize, label = 'Before Fitted')
-    if includeafter is True:
-        plt.plot(mats, aftrates, 'ro', label = 'After Underlying')
-        plt.plot(mats_fitteds, aftrate_fitteds, 'r' + fittedstyle, markersize = markersize, label = 'After Fitted')
-
-    plt.legend()
-
-    if savename is not None:
-        plt.savefig(savename)
-
-    if plotshow is True:
-        plt.show()
-
-    plt.clf()
 
 
 # Long to Wide Interest Rates for Many Zones/Same Dates:{{{1
