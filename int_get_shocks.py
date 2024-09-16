@@ -524,7 +524,7 @@ def getbondshocks_process(df):
                         highmat = thismat * 2
 
                     # get bonds that I compare j to
-                    comparisonks = [k for k in range(len(mats[i])) if mats[i][k] >= lowmat and mats[i][k] <= highmat]
+                    comparisonks = [k for k in range(len(mats[i])) if mats[i][k] >= lowmat and mats[i][k] <= highmat and k != j]
 
                     if len(comparisonks) == 0:
                         if thislevel > 20 or thislevel < -2 or abs(thischange) > 0.2:
@@ -532,8 +532,8 @@ def getbondshocks_process(df):
                         else:
                             isoutlier = False
                     else:
-                        comparisonlevel = np.mean([befrates[i][k] for k in comparisonks])
-                        comparisonchange = np.mean([aftrates[i][k] - befrates[i][k] for k in comparisonks])
+                        comparisonlevel = np.median([befrates[i][k] for k in comparisonks])
+                        comparisonchange = np.median([aftrates[i][k] - befrates[i][k] for k in comparisonks])
 
                         # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
                         if abs(thislevel - comparisonlevel) > 5 and (np.sign(thislevel) != np.sign(comparisonlevel) or thislevel / comparisonlevel < 0.75 or comparisonlevel / thislevel < 0.75):
@@ -548,18 +548,18 @@ def getbondshocks_process(df):
                         elif np.sign(thischange) != np.sign(comparisonchange):
                             # if thischange is positive while comparisonchange is negative and more than 0.2p.p. difference probably an outlier
                             isoutlier = True
-                        elif abs(thischange) < 0.5:
-                            # if only a small outlier then only remove if difference from comparisonchange very large
-                            if abs(thischange) < 4 * abs(comparisonchange):
-                                isoutlier = False
-                            else:
-                                isoutlier = True
                         else:
-                            # if big difference then be less selective about removing outlier
+                            # if only a small outlier then only remove if difference from comparisonchange very large
                             if abs(thischange) < 3 * abs(comparisonchange):
                                 isoutlier = False
                             else:
                                 isoutlier = True
+                        # else:
+                        #     # if big difference then be less selective about removing outlier
+                        #     if abs(thischange) < 3 * abs(comparisonchange):
+                        #         isoutlier = False
+                        #     else:
+                        #         isoutlier = True
 
                     if isoutlier is False:
                         keepj.append(j)
