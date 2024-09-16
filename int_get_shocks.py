@@ -373,6 +373,120 @@ def getbondshocks_process(df):
         dfout['iout__' + prefix_nonsource + '__source'] = sources
     # basic checks and reorder iout:}}}
 
+    # DELETE OLD OUTLIERS
+    # # remove outliers to get eout:{{{
+    # # something like ycdi__m1c_1c
+    # for prefix_nonsource in prefix_nonsources:
+    #     befrates = list(dfout['iout__' + prefix_nonsource + '__befrate'])
+    #     aftrates = list(dfout['iout__' + prefix_nonsource + '__aftrate'])
+    #     ids = list(dfout['iout__' + prefix_nonsource + '__id'])
+    #     mats = list(dfout['iout__' + prefix_nonsource + '__mat'])
+    #     names = list(dfout['iout__' + prefix_nonsource + '__name'])
+    #     sources = list(dfout['iout__' + prefix_nonsource + '__source'])
+    #
+    #     # now go through and replace rates/maturities accordingly
+    #     for i in range(len(befrates)):
+    #         
+    #         # drop i,j if it is an outlier:{{{
+    #         # drop outliers by comparing change in before and after for different maturities
+    #         # need to remove null values beforehand so can compute comparisonchange
+    #         # repeat until no additional outliers found
+    #         oldlen = None
+    #         while len(befrates[i]) != oldlen:
+    #             # record what old length was to verify no more changes made
+    #             oldlen = len(befrates[i])
+    #
+    #             keepj = []
+    #             for j in range(len(befrates[i])):
+    #                 # get the size of the change in this point
+    #                 thischange = aftrates[i][j] - befrates[i][j]
+    #
+    #                 if len(befrates[i]) < 2:
+    #                     # can't get a comparison so just keep if:
+    #                     # level satisfies >=-2 and <= 10
+    #                     # changes is not large
+    #                     comparison = 5
+    #                     comparisonchange = 0
+    #                     if befrates[i][j] < -2 or befrates[i][j] > 10 or abs(thischange) > 0.2:
+    #                         isoutlier = True
+    #                     else:
+    #                         isoutlier = False
+    #                 else:
+    #                     # compute change for interest rates around j
+    #                     # allows me to compare whether or not j is out of the ordinary
+    #                     if j == 0:
+    #                         # if first point compare to change for second point
+    #                         comparison = befrates[i][1]
+    #                         comparisonchange = aftrates[i][1] - befrates[i][1]
+    #                     elif j == len(befrates[i]) - 1:
+    #                         # if last point compare to change for penultimate point
+    #                         comparison = befrates[i][j - 1]
+    #                         comparisonchange = aftrates[i][j - 1] - befrates[i][j - 1]
+    #                     else:
+    #                         # if middle point compare to change for points before and after
+    #                         comparison = 0.5 * (befrates[i][j - 1] + befrates[i][j + 1])
+    #                         comparisonchange = 0.5 * (aftrates[i][j - 1] - befrates[i][j - 1] + aftrates[i][j + 1] - befrates[i][j + 1])
+    #
+    #                     # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
+    #                     if abs(befrates[i][j] - comparison) > 5 or abs(aftrates[i][j] - comparison) > 5 or abs(thischange) > 1:
+    #                         # first check if numbers are very different from nearby numbers
+    #                         # this can sometimes happen if the bond price is mistaken for the bond yield in which case one bond can have a "yield" of 100 rather than 1
+    #                         # also remove if a large change
+    #                         isoutlier = True
+    #                     elif abs(thischange) < 0.2:
+    #                         # else if change is small then not an outlier
+    #                         isoutlier = False
+    #                     elif np.sign(thischange) != np.sign(comparisonchange):
+    #                         # if thischange is positive while comparisonchange is negative probably an outlier
+    #                         isoutlier = True
+    #                     elif abs(thischange) < 0.3:
+    #                         # if only a small outlier then only remove is difference from comparisonchange very large
+    #                         if abs(thischange) < 4 * abs(comparisonchange):
+    #                             isoutlier = False
+    #                         else:
+    #                             isoutlier = True
+    #                     elif abs(thischange) < 0.4:
+    #                         if abs(thischange) < 3 * abs(comparisonchange):
+    #                             isoutlier = False
+    #                         else:
+    #                             isoutlier = True
+    #                     else:
+    #                         if abs(thischange) < 2 * abs(comparisonchange):
+    #                             isoutlier = False
+    #                         else:
+    #                             isoutlier = True
+    #                 
+    #                 if isoutlier is False:
+    #                     keepj.append(j)
+    #
+    #             # only keep non-outliers
+    #             befrates[i] = [befrates[i][j] for j in keepj]
+    #             aftrates[i] = [aftrates[i][j] for j in keepj]
+    #             mats[i] = [mats[i][j] for j in keepj]
+    #             ids[i] = [ids[i][j] for j in keepj]
+    #             names[i] = [names[i][j] for j in keepj]
+    #             sources[i] = [sources[i][j] for j in keepj]
+    #
+    #         # drop i,j if it is an outlier:}}}
+    #
+    #         # replace with na if []
+    #         if len(mats[i]) == 0:
+    #             befrates[i] = np.nan
+    #             aftrates[i] = np.nan
+    #             mats[i] = np.nan
+    #             ids[i] = np.nan
+    #             names[i] = np.nan
+    #             sources[i] = np.nan
+    #
+    #     dfout['eout__' + prefix_nonsource + '__befrate'] = befrates
+    #     dfout['eout__' + prefix_nonsource + '__aftrate'] = aftrates
+    #     dfout['eout__' + prefix_nonsource + '__mat'] = mats
+    #     dfout['eout__' + prefix_nonsource + '__id'] = ids
+    #     dfout['eout__' + prefix_nonsource + '__name'] = names
+    #     dfout['eout__' + prefix_nonsource + '__source'] = sources
+    # # remove outliers to get eout:}}}
+
+    # NEW APPROACH OUTLIERS
     # remove outliers to get eout:{{{
     # something like ycdi__m1c_1c
     for prefix_nonsource in prefix_nonsources:
@@ -385,7 +499,7 @@ def getbondshocks_process(df):
 
         # now go through and replace rates/maturities accordingly
         for i in range(len(befrates)):
-            
+
             # drop i,j if it is an outlier:{{{
             # drop outliers by comparing change in before and after for different maturities
             # need to remove null values beforehand so can compute comparisonchange
@@ -398,63 +512,55 @@ def getbondshocks_process(df):
                 keepj = []
                 for j in range(len(befrates[i])):
                     # get the size of the change in this point
+                    thislevel = befrates[i][j]
                     thischange = aftrates[i][j] - befrates[i][j]
 
-                    if len(befrates[i]) < 2:
-                        # can't get a comparison so just keep if:
-                        # level satisfies >=-2 and <= 10
-                        # changes is not large
-                        comparison = 5
-                        comparisonchange = 0
-                        if befrates[i][j] < -2 or befrates[i][j] > 10 or abs(thischange) > 0.2:
+                    thismat = mats[i][j]
+                    if thismat < 1.25:
+                        lowmat = 0
+                        highmat = 2
+                    else:
+                        lowmat = thismat / 2
+                        highmat = thismat * 2
+
+                    # get bonds that I compare j to
+                    comparisonks = [k for k in range(len(mats[i])) if mats[i][k] >= lowmat and mats[i][k] <= highmat]
+
+                    if len(comparisonks) == 0:
+                        if thislevel > 20 or thislevel < -2 or abs(thischange) > 0.2:
                             isoutlier = True
                         else:
                             isoutlier = False
                     else:
-                        # compute change for interest rates around j
-                        # allows me to compare whether or not j is out of the ordinary
-                        if j == 0:
-                            # if first point compare to change for second point
-                            comparison = befrates[i][1]
-                            comparisonchange = aftrates[i][1] - befrates[i][1]
-                        elif j == len(befrates[i]) - 1:
-                            # if last point compare to change for penultimate point
-                            comparison = befrates[i][j - 1]
-                            comparisonchange = aftrates[i][j - 1] - befrates[i][j - 1]
-                        else:
-                            # if middle point compare to change for points before and after
-                            comparison = 0.5 * (befrates[i][j - 1] + befrates[i][j + 1])
-                            comparisonchange = 0.5 * (aftrates[i][j - 1] - befrates[i][j - 1] + aftrates[i][j + 1] - befrates[i][j + 1])
+                        comparisonlevel = np.mean([befrates[i][k] for k in comparisonks])
+                        comparisonchange = np.mean([aftrates[i][k] - befrates[i][k] for k in comparisonks])
 
                         # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
-                        if abs(befrates[i][j] - comparison) > 5 or abs(aftrates[i][j] - comparison) > 5 or abs(thischange) > 1:
-                            # first check if numbers are very different from nearby numbers
-                            # this can sometimes happen if the bond price is mistaken for the bond yield in which case one bond can have a "yield" of 100 rather than 1
-                            # also remove if a large change
+                        if abs(thislevel - comparisonlevel) > 5 and (np.sign(thislevel) != np.sign(comparisonlevel) or thislevel / comparisonlevel < 0.75 or comparisonlevel / thislevel < 0.75):
+                            # set as outlier if >5p.p. difference AND
+                            # this and comparison levels are different signs OR
+                            # this and comparison levels have more than a 25% difference
+                            # the latter condition means I wouldn't drop cases where interest rates are very large i.e. difference would need to be 100 and 75 rather than 100 and 95
                             isoutlier = True
                         elif abs(thischange) < 0.2:
                             # else if change is small then not an outlier
                             isoutlier = False
                         elif np.sign(thischange) != np.sign(comparisonchange):
-                            # if thischange is positive while comparisonchange is negative probably an outlier
+                            # if thischange is positive while comparisonchange is negative and more than 0.2p.p. difference probably an outlier
                             isoutlier = True
-                        elif abs(thischange) < 0.3:
-                            # if only a small outlier then only remove is difference from comparisonchange very large
+                        elif abs(thischange) < 0.5:
+                            # if only a small outlier then only remove if difference from comparisonchange very large
                             if abs(thischange) < 4 * abs(comparisonchange):
                                 isoutlier = False
                             else:
                                 isoutlier = True
-                        elif abs(thischange) < 0.4:
+                        else:
+                            # if big difference then be less selective about removing outlier
                             if abs(thischange) < 3 * abs(comparisonchange):
                                 isoutlier = False
                             else:
                                 isoutlier = True
-                        else:
-                            if abs(thischange) < 2 * abs(comparisonchange):
-                                isoutlier = False
-                            else:
-                                isoutlier = True
-                    
+
                     if isoutlier is False:
                         keepj.append(j)
 
