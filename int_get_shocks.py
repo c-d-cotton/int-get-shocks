@@ -43,18 +43,17 @@ reldict_daily_extended['m1o'] = {'rday': -1, 'open': True, 'weekendignore': True
 reldict_daily_extended['1o'] = {'rday': 1, 'open': True, 'weekendignore': True}
 # this is to get the change before the event
 reldict_daily_extended['m1c_f7'] = {'rday': -1, 'open': False, 'weekendignore': True, 'ffill': 7}
-reldict_daily_extended['m90c_f7'] = {'rday': -90, 'open': False, 'weekendignore': True, 'ffill': 7}
+reldict_daily_extended['m90c_b7'] = {'rday': -90, 'open': False, 'weekendignore': True, 'bfill': 7}
 
 # Shockdict Daily:{{{2
 shockdict_daily_basic = {}
-shockdict_daily_basic["m1c_1c"] = ["m1c", "1c"]
+shockdict_daily_basic["1d"] = ["m1c", "0c"]
 
 shockdict_daily_extended = {}
-shockdict_daily_extended["m1c_1c"] = ["m1c", "1c"]
-shockdict_daily_extended["m1c_1o"] = ["m1c", "1o"]
-shockdict_daily_extended["m1o_1o"] = ["m1o", "1o"]
-shockdict_daily_extended["m90c_m1c"] = ["m90c_f7", "m1c_f7"]
-shockdict_daily_extended["m1c_m1c"] = ["m1c_f7", "m1c_f7"]
+shockdict_daily_extended["2d"] = ["m1c", "1c"]
+shockdict_daily_extended["m1c"] = ["m1c_f7", "m1c_f7"]
+shockdict_daily_extended["m90m1c"] = ["m90c_b7", "m1c_f7"]
+shockdict_daily_extended["2do"] = ["m1c", "1o"]
 
 # Reldict Return Daily:{{{2
 reldictreturn_daily_extended = {'m1c': 'm1c_f7'}
@@ -62,31 +61,44 @@ reldictreturn_daily_extended = {'m1c': 'm1c_f7'}
 # Reldict Intraday:{{{2
 # reldict to apply as input in function to getdfintrarel_reldict
 reldict_intra_basic = {}
+# if event is 1600M, this would take the first trade at 1550M-1559M or if that's not defined then the last trade at 1500M-1549M (with 5 minute interval data)
+reldict_intra_basic['m1h'] = {'rpos': -2, 'open': True, 'bfill': 2, 'ffill': 10, 'ffillfirst': False}
+# if event is 1600M, this would take the last trade at 1610M-1619M or if that's not defined then the first trade at 1620M-1659M (with 5 minute interval data)
+reldict_intra_basic['1h'] = {'rpos': 3, 'open': False, 'ffill': 2, 'bfill': 8, 'ffillfirst': True}
+# if event is 1600M, this would take the first trade at 1550M-1559M (with 5 minute interval data)
+reldict_intra_basic['m10m'] = {'rpos': -2, 'open': True, 'bfill': 2}
+# if event is 1600M, this would take the last trade at 1610M-1619M (with 5 minute interval data)
+reldict_intra_basic['20m'] = {'rpos': 3, 'open': False, 'ffill': 2}
+# and define precise 15 minute intervals
 # if event is 1600M, this would take the last trade at 1500M-1549M (with 5 minute interval data)
 reldict_intra_basic['m1h'] = {'rpos': -3, 'open': False, 'ffill': 9}
 # if event is 1600M, this would take the first trade at 1610M-1659M (with 5 minute interval data)
 reldict_intra_basic['1h'] = {'rpos': 2, 'open': True, 'bfill': 9}
 
 reldict_intra_extended = copy.deepcopy(reldict_intra_basic)
-reldict_intra_extended['m20m'] = {'rpos': -3, 'open': False, 'ffill': 2}
-# reldict_intra_extended['m15mp'] = {'rpos': -2, 'open': False, 'ffill': 1}
-reldict_intra_extended['m3h'] = {'rpos': -3, 'open': False, 'ffill': 33}
-reldict_intra_extended['m6h'] = {'rpos': -3, 'open': False, 'ffill': 69}
-reldict_intra_extended['20m'] = {'rpos': 2, 'open': True, 'bfill': 2}
-# reldict_intra_extended['15mp'] = {'rpos': 1, 'open': True, 'bfill': 1}
-reldict_intra_extended['3h'] = {'rpos': 2, 'open': True, 'bfill': 33}
-reldict_intra_extended['6h'] = {'rpos': 2, 'open': True, 'bfill': 69}
+# if event is 1600M, this would take the first trade at 1550M-1559M or if that's not defined then the last trade at 1530M-1549M (with 5 minute interval data)
+reldict_intra_extended['m30m'] = {'rpos': -2, 'open': True, 'bfill': 2, 'ffill': 4, 'ffillfirst': False}
+# if event is 1600M, this would take the last trade at 1610M-1619M or if that's not defined then the first trade at 1620M-1630M (with 5 minute interval data)
+reldict_intra_extended['30m'] = {'rpos': 3, 'open': False, 'ffill': 2, 'bfill': 2, 'ffillfirst': True}
+# take point 12 hours from now i.e. 12 * 12 - 1 (since 12 5 minute intervals in each hour)
+# reldict_intra_extended['12h'] = {'rpos': 143, 'open': False, 'ffill': 141}
+# take point 24 hours from now i.e. 24 * 12 - 1
+reldict_intra_extended['24h'] = {'rpos': 287, 'open': False, 'ffill': 285}
 
 # Shockdict Intraday:{{{2
 # shockdict to apply as input in function to getbefaft
 shockdict_intra_basic = {}
-shockdict_intra_basic["m1h_1h"] = ["m1h", "1h"]
+shockdict_intra_basic["2h"] = ["m1h", "1h"]
+shockdict_intra_basic["30m"] = ["m10m", "20m"]
 
 shockdict_intra_extended = {}
-shockdict_intra_extended["m20m_20m"] = ["m20m", "20m"]
-shockdict_intra_extended["m1h_1h"] = ["m1h", "1h"]
-shockdict_intra_extended["m3h_3h"] = ["m3h", "3h"]
-shockdict_intra_extended["m6h_6h"] = ["m6h", "6h"]
+shockdict_intra_extended["1h"] = ["m30m", "30m"]
+# shockdict_intra_extended["12h"] = ["m2h", "12h"]
+shockdict_intra_extended["24h"] = ["m1h", "24h"]
+# shockdict_intra_extended["48h"] = ["m2h", "48h"]
+# shockdict_intra_extended["72h"] = ["m2h", "72h"]
+# shockdict_intra_extended["96h"] = ["m2h", "96h"]
+shockdict_intra_extended["168h"] = ["m1h", "168h"]
 
 # Auxilliary Functions:{{{1
 def processdates(dates, zonestodo, zonesavailable):
