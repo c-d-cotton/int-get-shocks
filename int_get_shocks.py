@@ -1231,6 +1231,44 @@ def getdomestic_fromlong(dflong, dfdates, datevar, suffix = 'd'):
     return(dfdomestic)
 
 
+def getave_fromlong(dflong, dfdates, datevar, zonesinclude = None, suffix = ''):
+    """
+    This computes the global mean including the local zone for variables around the mean
+    All the variables in dfdates except 'zone' and datevar must be floats
+    
+    """
+    if zonesinclude is not None:
+        dflong = dflong[dflong['zone'].isin(zonesinclude)].copy()
+
+    # reshape long to wide
+    dfwide = pd.pivot(dflong, index = datevar, columns = 'zone', values = [col for col in dflong.columns if col not in ['zone', datevar]])
+
+    varnames = sorted(list(set([col[0] for col in dfwide.columns])))
+    zones = sorted(list(set([col[1] for col in dfwide.columns])))
+
+    # adjust before merge
+    # rename as single word so don't have issues when merging with dfdates
+    dfwide.columns = [col[0] + '__' + col[1] for col in dfwide.columns]
+    dfwide = dfwide.reset_index()
+
+    # merge in zone so now have zone/date pair and all interest rates of all zones
+    dfwide = dfwide.merge(dfdates, on = datevar, how = 'right')
+
+    # for each zone in the zones in the dataset, set that dfwide data to nan
+    # for zone in zones:
+    #     dfwide.loc[dfwide['zone'] == zone, [col for col in dfwide.columns if col.split('__')[-1] == zone]] = np.nan
+
+    # FOR EACH ZONE
+    dfglobal = pd.DataFrame({'zone': dfwide['zone'], datevar: dfwide[datevar]})
+    for varname in varnames:
+        # get all columns relating to a given varname
+        dfwide2 = dfwide[[col for col in dfwide.columns if '__'.join(col.split('__')[: -1]) == varname]]
+        # define a single global varname for that variable
+        dfglobal[varname.split('_')[0] + suffix + '_' + '_'.join(varname.split('_')[1: ])] = dfwide2.mean(axis = 1)
+
+    return(dfglobal)
+
+
 def getforeign_fromlong(dflong, dfdates, datevar, zonesinclude = None, suffix = 'f'):
     """
     This computes the global mean excluding the local zone for variables around the mean
