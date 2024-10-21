@@ -1326,14 +1326,14 @@ def getzones_fromlong(dflong, datevar, dfdates = None, zonesinclude = None, suff
     if suffix is not None:
         dfwide.columns = [col[0].split('_')[0] + 'z' + col[1].lower() + '_' + '_'.join(col[0].split('_')[1: ]) for col in dfwide.columns]
 
-    # get index back
-    dfwide = dfwide.reset_index()
-
     # if there are object dtypes in pandas pivot seems to make all variables object afterwards
     # therefore convert back to numeric where possible
     # dfwide = dfwide.astype(float, errors = 'ignore')
     for var in dfwide.columns:
-        dfwide[var] = pd.to_numeric(dfwide[var], errors = 'ignore')
+        dfwide[var] = pd.to_numeric(dfwide[var])
+
+    # get index back
+    dfwide = dfwide.reset_index()
 
     if dfdates is not None:
         dfwide = dfwide.merge(dfdates[['zone', datevar]], on = datevar, how = 'right')
