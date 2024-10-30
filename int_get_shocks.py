@@ -491,9 +491,9 @@ def getbondshocks_process(df):
     return(dfout)
 
 
-def getindividualbonds(df):
+def getindividualbonds(df, unprocessed = False):
     """
-    Convert and unprocessed or processed (with all sources) data frame back to individual bonds
+    Convert an unprocessed or processed (with all sources) dataframe back to individual bonds
     Rather than lists
     """
 
@@ -508,7 +508,13 @@ def getindividualbonds(df):
         mats = list(df[befrate_stem + '__mat'])
         ids = list(df[befrate_stem + '__id'])
         names = list(df[befrate_stem + '__name'])
-        sources = list(df[befrate_stem + '__source'])
+        if unprocessed is True:
+            # get sources of same dimension as befrates
+            sources = []
+            for i in range(len(befrates)):
+                sources.append([befrate_stem.split('__')[0]] * len(befrates[i]))
+        else:
+            sources = list(df[befrate_stem + '__source'])
 
         rowstoconcat = []
 
@@ -523,8 +529,12 @@ def getindividualbonds(df):
                 continue
 
             for j in range(len(befrates[i])):
-                # this is either "e" (excluding outliers) or "i" (including outliers)
-                outliertype = befrate_stem.split('__')[0][0]
+                if unprocessed is True:
+                    outliertype = 'i'
+                else:
+                    # this is either "e" (excluding outliers) or "i" (including outliers)
+                    outliertype = befrate_stem.split('__')[0][0]
+                # this is the same for both unprocessed and processed
                 ycdi = befrate_stem.split('__')[1]
                 if ycdi == 'ycdi':
                     ycpart = 'yc'
@@ -532,6 +542,7 @@ def getindividualbonds(df):
                     ycpart = 'yi'
                 else:
                     raise ValueError('ycdi part misspecified')
+                # this is the same for both unprocessed and processed
                 # m1c1c
                 timeframe = befrate_stem.split('__')[2]
 
@@ -543,7 +554,14 @@ def getindividualbonds(df):
             
                 outdict[first3parts + '0' + last2parts] = [befrates[i][j]]
                 outdict[first3parts + '1' + last2parts] = [aftrates[i][j]]
-                outdict[first3parts + 'd' + last2parts] = [aftrates[i][j] - befrates[i][j]]
+                if unprocessed is True:
+                    # strings so sometimes fails
+                    try:
+                        outdict[first3parts + 'd' + last2parts] = [aftrates[i][j] - befrates[i][j]]
+                    except Exception:
+                        outdict[first3parts + 'd' + last2parts] = [np.nan]
+                else:
+                    outdict[first3parts + 'd' + last2parts] = [aftrates[i][j] - befrates[i][j]]
                 outdict[first3parts + 'm' + last2parts] = [mats[i][j]]
                 outdict[first3parts + 'id' + last2parts] = [ids[i][j]]
 
