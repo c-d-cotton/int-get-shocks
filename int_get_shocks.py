@@ -539,7 +539,7 @@ def getindividualbonds(df, unprocessed = False):
                 if ycdi == 'ycdi':
                     ycpart = 'yc'
                 elif ycdi == 'ycdi_il':
-                    ycpart = 'yi'
+                    ycpart = 'yl'
                 else:
                     raise ValueError('ycdi part misspecified')
                 # this is the same for both unprocessed and processed
