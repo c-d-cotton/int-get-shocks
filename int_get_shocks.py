@@ -205,42 +205,43 @@ def getranking(mats):
     Get ranking of a list of maturities for bonds
     """
 
+    # decided to use all mats rather than just mats_max15
     # exclude maturities over 15 years when doing source ranking
-    mats_max15 = [mat for mat in mats if mat <= 15]
+    # mats_max15 = [mat for mat in mats if mat <= 15]
 
-    if len(mats_max15) > 0:
-        minmats = min(mats_max15)
-        maxmats = max(mats_max15)
-        between_3_7 = [mat for mat in mats_max15 if mat > 3 and mat < 7]
+    if len(mats) > 0:
+        minmats = min(mats)
+        maxmats = max(mats)
+        between_3_7 = [mat for mat in mats if mat > 3 and mat < 7]
     else:
         minmats = None
         maxmats = None
         between_3_7 = []
 
     # give ranking where 1 is higher than 0 in goodness
-    if len(mats_max15) == 0:
+    if len(mats) == 0:
         # need to do this case first since when mats == [], minmats and maxmats are undefined
         matsrank = '0'
-    elif len(mats_max15) >= 10 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
+    elif len(mats) >= 10 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
         matsrank = '6'
-    elif len(mats_max15) >= 8 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
+    elif len(mats) >= 8 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
         matsrank = '5'
-    elif len(mats_max15) >= 6 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
+    elif len(mats) >= 6 and minmats <= 2 and maxmats >= 8 and len(between_3_7) > 0:
         matsrank = '4'
-    elif len(mats_max15) >= 5 and minmats <= 3 and maxmats >= 7:
+    elif len(mats) >= 5 and minmats <= 3 and maxmats >= 7:
         matsrank = '3'
-    elif len(mats_max15) >= 4 and minmats <= 5 and maxmats >= 5:
+    elif len(mats) >= 4 and minmats <= 5 and maxmats >= 5:
         matsrank = '2'
-    elif len(mats_max15) >= 4:
+    elif len(mats) >= 4:
         matsrank = '1'
     else:
         matsrank = '0'
 
     # get second matsrank simply based on the number of maturities available
     # this only matters if the original matsrank and the sourcerank are the same
-    if len(mats_max15) > 9999:
+    if len(mats) > 9999:
         raise ValueError('matsrank2 will not work properly since too many maturities available.')
-    matsrank2 = str(len(mats_max15)).zfill(4)
+    matsrank2 = str(len(mats)).zfill(4)
 
     overallrank = float(matsrank + '.' + matsrank2)
 
@@ -309,7 +310,9 @@ def getbondshocks_process(df):
         # append to lists if befrate and aftrate are defined and not strings i.e. not "badindex"
         for i in range(len(befrates)):
             for j in range(len(befrates[i])):
-                if pd.notnull(befrates[i][j]) and pd.notnull(aftrates[i][j]) and isinstance(befrates[i][j], str) is False and isinstance(aftrates[i][j], str) is False:
+                # note that sometimes mats[i][j] can be null
+                # for example AUS non-benchmark bond AU3TB0000143 issued on 20120625d but appears in data on 20120619d
+                if pd.notnull(befrates[i][j]) and pd.notnull(aftrates[i][j]) and pd.notnull(mats[i][j]) and isinstance(befrates[i][j], str) is False and isinstance(aftrates[i][j], str) is False:
                     befrates_out[i] = befrates_out[i] + [befrates[i][j]]
                     aftrates_out[i] = aftrates_out[i] + [aftrates[i][j]]
                     ids_out[i] = ids_out[i] + [ids[i][j]]
@@ -624,7 +627,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
         elif thisdict['yctype'] in nspossibleval:
             if thisdict['yctype'] == 'ns':
                 # use default ns rank
-                thisdict['nsrank'] = 4
+                thisdict['nsrank'] = 1
             else:
                 thisdict['nsrank'] = int(thisdict['yctype'][2])
             if 'name' not in thisdict:
@@ -885,20 +888,32 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                             last NSLU parameter is negative which I think is driving strange numbers so drop if that happens
                             }}}"""
 
+                            # use parameters from algorithm if success is True and tau parameter is non-negative
                             if success is True:
                                 befparamdict = vars(befcurve)
                                 aftparamdict = vars(aftcurve)
 
-                                # drop if bad parameter
+                                # if tau non-positive then set success to be False
                                 if befparamdict['tau'] <= 0 or aftparamdict['tau'] <= 0:
-                                    continue
+                                    success = False
+
+                            if success is True:
 
                                 outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
                                 outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
-                                outdict[outputprefix + '_i_me'][i] = mats[0]
-                                outdict[outputprefix + '_i_ml'][i] = mats[-1]
+
                             else:
-                                continue
+                                # use my own code fixing tau parameter to 1
+                                # should always work...
+                                befparams = nsme_singlereg(np.array(mats), np.array(befrates) / 100, 1)
+                                aftparams = nsme_singlereg(np.array(mats), np.array(aftrates) / 100, 1)
+
+                                outdict[outputprefix + '_i_p0'][i] = [befparams[1], befparams[2], befparams[3], befparams[4]]
+                                outdict[outputprefix + '_i_p1'][i] = [aftparams[1], aftparams[2], aftparams[3], aftparams[4]]
+
+                            # add first/last maturity values
+                            outdict[outputprefix + '_i_me'][i] = mats[0]
+                            outdict[outputprefix + '_i_ml'][i] = mats[-1]
                             # getting Nelson-Siegel parameters:}}}
 
                             # save additional NS vars:{{{
@@ -964,8 +979,13 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 # check to ensure not defining bad variables:}}}
 
                                 # note multiplying by 100 to return to percentage form
-                                before = befcurve(maturity) * 100
-                                after = aftcurve(maturity) * 100
+                                befparams = outdict[outputprefix + '_i_p0'][i]
+                                aftparams = outdict[outputprefix + '_i_p1'][i]
+
+                                before = nsme_yield(maturity, befparams) * 100
+                                after = nsme_yield(maturity, aftparams) * 100
+                                # before = befcurve(maturity) * 100
+                                # after = aftcurve(maturity) * 100
                                 di = after - before
 
                             elif thisdict['yctype'] == 'wi':
