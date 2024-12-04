@@ -14,7 +14,7 @@ import sys
 try:
     __projectdir__ = Path(os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + relativetoprojectdir))
 except NameError:
-    __projectdir__ = Path(os.path.abspath(""))
+    __projectdir__ = Path(os.path.abspath("") + relativetoprojectdir)
 
 macrodataexternal_readfile = __projectdir__ / Path('../mdexternalpath.txt')
 windowspath = Path("T:/cc_ra/macrodata-external/")
