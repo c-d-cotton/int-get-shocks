@@ -440,6 +440,8 @@ def getbondshocks_process(df):
                         if abs( 1/(1+thislevel/100) - 1/(1+comparisonlevel/100) ) > 0.05:
                             # I do the adjustment 1/(1+thislevel/100) so that I wouldn't more quickly drop cases where interest rates are very large i.e. difference would need to be 100 and 90 rather than 100 and 95
                             isoutlier = True
+                        elif abs(thischange) > 10:
+                            isoutlier = True
                         elif abs(thischange) < 0.2:
                             # else if change is small then not an outlier
                             isoutlier = False
