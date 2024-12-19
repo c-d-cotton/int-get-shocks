@@ -325,7 +325,7 @@ def fillgaps_days(df):
     return(df)
 
 
-def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtimes = None, holidayignore = None, weekendignore = None, fillgaps = True):
+def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtimes = None, holidayignore = None, weekendignore = None, fillgaps = True, zone = None):
     """{{{
     dfclose is daily data over which I get the relative dates
     The index of daily should be in standard form i.e. 20210304d
@@ -344,6 +344,7 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
     open: Use open data rather than closed data
     ffill: If not False then specify an integer for number of days to fill data forward when computing shocks
     bfill: equivalent to ffill but backwards
+    zone: Only used when holidayignore = True (since need to specify which zone holidays coming from)
 
 
     dfopen is the df with open data rather than closed data
@@ -359,11 +360,16 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
 
     # basic checks on reldict:{{{
     for name in reldict:
+        if 'dfrel' in reldict[name]:
+            raise ValueError('Need to work with reldict where I have not already applied getdfdailyrel_reldict i.e. by applying copy.deepcopy to reldict beforehand.')
+
         singledict = reldict[name]
 
         # add defaults from function inputs
+        # I adjust holidayignore to be the relevant zone later
         if holidayignore is not None:
             singledict['holidayignore'] = holidayignore
+        if weekendignore is not None:
             singledict['weekendignore'] = weekendignore
 
         # go through and check arguments to singledict
@@ -393,6 +399,12 @@ def getdfdailyrel_reldict(dfclose, eventdates, reldict, dfopen = None, eventtime
             if dfopen is None:
                 raise ValueError('Open option specified but no dfopen included.')
 
+        # adjust holidayignore to be local zone
+        if singledict['holidayignore'] is True:
+            if zone is not None:
+                singledict['holidayignore'] = zone
+            else:
+                raise ValueError('When specify holidayignore is True, need to specify zone when calling getdfdailyrel_reldict (to specify relevant zone for holidays.')
     # basic checks on reldict:}}}
 
     if fillgaps is True:
