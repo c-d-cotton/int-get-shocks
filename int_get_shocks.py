@@ -987,11 +987,17 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 befparams = outdict[outputprefix + '_i_p0'][i]
                                 aftparams = outdict[outputprefix + '_i_p1'][i]
 
-                                before = nsme_yield(maturity, befparams) * 100
-                                after = nsme_yield(maturity, aftparams) * 100
-                                # before = befcurve(maturity) * 100
-                                # after = aftcurve(maturity) * 100
-                                di = after - before
+                                if pd.isnull(befparams) is not True and pd.isnull(aftparams) is not True:
+                                    before = nsme_yield(maturity, befparams) * 100
+                                    after = nsme_yield(maturity, aftparams) * 100
+                                    # before = befcurve(maturity) * 100
+                                    # after = aftcurve(maturity) * 100
+                                    di = after - before
+
+                                else:
+                                    before = np.nan
+                                    after = np.nan
+                                    di = np.nan
 
                             elif thisdict['yctype'] == 'wi':
                                 if '_' in name:
