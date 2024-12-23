@@ -890,32 +890,35 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                             last NSLU parameter is negative which I think is driving strange numbers so drop if that happens
                             }}}"""
 
-                            # use parameters from algorithm if success is True and tau parameter is non-negative
+                            # use parameters from algorithm if success is True and parameters are good
                             if success is True:
                                 befparamdict = vars(befcurve)
                                 aftparamdict = vars(aftcurve)
 
-                                # if tau non-positive then set success to be False
-                                if befparamdict['tau'] <= 0 or aftparamdict['tau'] <= 0:
+                                # if tau non-positive or beta1 is very large then set success to be False
+                                if befparamdict['tau'] <= 0 or aftparamdict['tau'] <= 0 or abs(befparamdict['beta1']) > 100 or abs(aftparamdict['beta1']) > 100:
                                     success = False
 
-                            if success is True:
+                            # if not worked try with my code setting tau=1
+                            if success is False:
+                                # use my own code fixing tau parameter to 1
+                                # should always run
+                                befparams = nsme_singlereg(np.array(mats), np.array(befrates) / 100, 1)
+                                aftparams = nsme_singlereg(np.array(mats), np.array(aftrates) / 100, 1)
+                                befparamdict = {'beta0': befparams[1], 'beta1': befparams[2], 'beta2': befparams[3], 'tau': befparams[4]}
+                                aftparamdict = {'beta0': aftparams[1], 'beta1': aftparams[2], 'beta2': aftparams[3], 'tau': aftparams[4]}
 
+                                if abs(befparamdict['beta1']) <= 100 and abs(aftparamdict['beta1']) <=100:
+                                    success = True
+
+                            if success is True:
+                                # add params
                                 outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
                                 outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
 
-                            else:
-                                # use my own code fixing tau parameter to 1
-                                # should always work...
-                                befparams = nsme_singlereg(np.array(mats), np.array(befrates) / 100, 1)
-                                aftparams = nsme_singlereg(np.array(mats), np.array(aftrates) / 100, 1)
-
-                                outdict[outputprefix + '_i_p0'][i] = [befparams[1], befparams[2], befparams[3], befparams[4]]
-                                outdict[outputprefix + '_i_p1'][i] = [aftparams[1], aftparams[2], aftparams[3], aftparams[4]]
-
-                            # add first/last maturity values
-                            outdict[outputprefix + '_i_me'][i] = mats[0]
-                            outdict[outputprefix + '_i_ml'][i] = mats[-1]
+                                # add first/last maturity values
+                                outdict[outputprefix + '_i_me'][i] = mats[0]
+                                outdict[outputprefix + '_i_ml'][i] = mats[-1]
                             # getting Nelson-Siegel parameters:}}}
 
                             # save additional NS vars:{{{
