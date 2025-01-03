@@ -16,26 +16,22 @@ try:
 except NameError:
     __projectdir__ = Path(os.path.abspath("") + relativetoprojectdir)
 
-macrodataexternal_readfile = __projectdir__ / Path('../mdexternalpath.txt')
-windowspath = Path("T:/cc_ra/macrodata-external/")
-clusterpath = Path("/shared/cc_ra/macrodata-external/")
-
-if os.path.isfile(macrodataexternal_readfile):
-    # first try to read macrodataexternal from ../mdexternalpath.txt
-    with open(macrodataexternal_readfile) as f:
-        macrodataexternal = f.read()
-    if macrodataexternal[-1] == '\n':
-        macrodataexternal = macrodataexternal[: -1]
-    # if relative path, give relative to this projectdir
-    if str(macrodataexternal)[0: 2] == '..':
-        macrodataexternal = os.path.abspath(__projectdir__ / macrodataexternal)
-    macrodataexternal = Path(macrodataexternal)
-elif os.path.isdir(windowspath):
-    macrodataexternal = windowspath
-elif os.path.isdir(clusterpath):
-    macrodataexternal = clusterpath
+rootdirpath = __projectdir__ / Path('../mdexternalpath.txt')
+homedirpath = Path.home() / Path('.mdexternalpath.txt')
+if os.path.isfile(rootdirpath):
+    macrodataexternal_readfile = rootdirpath
+elif os.path.isfile(homedirpath):
+    macrodataexternal_readfile = homedirpath
 else:
     print('Warning: macrodata-external folder cannot be found. Maybe need to open T:/ drive on Windows.')
+
+# read location of macrodata-external folder from file
+with open(macrodataexternal_readfile) as f:
+    macrodataexternal = f.read()
+if macrodataexternal[-1] == '\n':
+    macrodataexternal = macrodataexternal[: -1]
+macrodataexternal = Path(macrodataexternal)
+
 # DO NOT CHANGE BETWEEN the two lines beginning # preamble_macrodata
 # preamble_macrodata:}}}
 
