@@ -18,6 +18,8 @@ import copy
 import datetime
 from nelson_siegel_svensson.calibrate import calibrate_ns_ols
 from nelson_siegel_svensson.calibrate import NelsonSiegelCurve
+from nelson_siegel_svensson.calibrate import calibrate_nss_ols
+from nelson_siegel_svensson.calibrate import NelsonSiegelSvenssonCurve
 import numpy as np
 import pandas as pd
 import pickle
@@ -609,6 +611,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
     timeframes = sorted(list(set([col.split('__')[2] for col in dfprocessed.columns])))
 
     nspossibleval = ['ns', 'ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6']
+    nsspossibleval = ['nss', 'nss1', 'nss2', 'nss3', 'nss4', 'nss5', 'nss6']
 
     # adjust input dicts:{{{
     # if inputted single dict, adjust to be a list
@@ -630,6 +633,14 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
             if thisdict['yctype'] == 'ns':
                 # use default ns rank
                 thisdict['nsrank'] = 1
+            else:
+                thisdict['nsrank'] = int(thisdict['yctype'][2])
+            if 'name' not in thisdict:
+                thisdict['name'] = ['m06', 'y01', 'y02', 'y03', 'y04', 'y05', 'y07', 'y10', 'y15']
+        elif thisdict['yctype'] in nsspossibleval:
+            if thisdict['yctype'] == 'nss':
+                # use default ns rank
+                thisdict['nsrank'] = 4
             else:
                 thisdict['nsrank'] = int(thisdict['yctype'][2])
             if 'name' not in thisdict:
@@ -773,8 +784,8 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                             outdict[outputprefix + '_i_s_' + name2] = [np.nan] * len(dfprocessed)
                             
                     # only for ns case - add Nelson-Siegel parameters
-                    if thisdict['yctype'] in nspossibleval:
-                        # always add parameters for ns
+                    if thisdict['yctype'] in nspossibleval + nsspossibleval:
+                        # always add parameters for ns/nss
                         outdict[outputprefix + '_i_p0'] = [np.nan] * len(dfprocessed)
                         outdict[outputprefix + '_i_p1'] = [np.nan] * len(dfprocessed)
                         outdict[outputprefix + '_i_me'] = [np.nan] * len(dfprocessed)
@@ -865,10 +876,6 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                             # getting Nelson-Siegel parameters:{{{
                             # only need to do once for each row
 
-                            # verify ranking is high enough for nelson-siegel
-                            if thisrank < 1:
-                                continue
-
                             success = False
                             try:
                                 # note dividing by 100
@@ -915,6 +922,56 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 # add params
                                 outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
                                 outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
+
+                                # add first/last maturity values
+                                outdict[outputprefix + '_i_me'][i] = mats[0]
+                                outdict[outputprefix + '_i_ml'][i] = mats[-1]
+                            # getting Nelson-Siegel parameters:}}}
+
+                            # save additional NS vars:{{{
+                            if thisdict['addinfovars'] is True:
+                                outdict[outputprefix + '_i_rk'][i] = thisrank
+                                outdict[outputprefix + '_i_r0'][i] = befrates
+                                outdict[outputprefix + '_i_r1'][i] = aftrates
+                                outdict[outputprefix + '_i_i'][i] = ids
+                                outdict[outputprefix + '_i_m'][i] = mats
+                                outdict[outputprefix + '_i_n'][i] = names
+                                outdict[outputprefix + '_i_s'][i] = sources
+                            # save additional NS vars:}}}
+
+                        # do this only once - not for every name in thisdict['name']
+                        if thisdict['yctype'] in nsspossibleval:
+                            # getting Nelson-Siegel-Svensson parameters:{{{
+                            # only need to do once for each row
+
+                            success = False
+                            try:
+                                # note dividing by 100
+                                befcurve, befstatus = calibrate_nss_ols(np.array(mats), np.array(befrates) / 100)
+                                aftcurve, aftstatus = calibrate_nss_ols(np.array(mats), np.array(aftrates) / 100)
+                                if befstatus['success'] is True and aftstatus['success'] is True:
+                                    success = True
+                            except Exception:
+                                None
+
+                            # use parameters from algorithm if success is True and parameters are good
+                            if success is True:
+                                befparamdict = vars(befcurve)
+                                aftparamdict = vars(aftcurve)
+
+                                # if tau non-positive then set success to be False
+                                if befparamdict['tau1'] <= 0 or aftparamdict['tau1'] <= 0 or befparamdict['tau2'] <= 0 or aftparamdict['tau2'] <= 0:
+                                    success = False
+
+                            # if not worked try with my code setting tau=1
+                            if success is False:
+                                # not doing for moment
+                                None
+
+                            if success is True:
+                                # add params
+                                outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['beta3'], befparamdict['tau1'], befparamdict['tau2']]
+                                outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['beta3'], aftparamdict['tau1'], aftparamdict['tau2']]
 
                                 # add first/last maturity values
                                 outdict[outputprefix + '_i_me'][i] = mats[0]
@@ -992,6 +1049,42 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                     after = nsme_yield(maturity, aftparams) * 100
                                     # before = befcurve(maturity) * 100
                                     # after = aftcurve(maturity) * 100
+                                    di = after - before
+
+                            elif thisdict['yctype'] in nsspossibleval:
+                                
+                                maturity = getsinglemat(name)
+
+                                # check to ensure not defining bad variables:{{{
+                                # Issue with Nelson-Siegel estimation:
+                                # - If I only have data for year x onwards, the data pre-year x can be very off
+                                # - For example, when I had data for years 2-15 which went from 16-20 (with a bit of a sudden jump), Nelson-Siegel estimated the yield for a 1-year bond to be 14000%
+                                # - So should using the estimates for Nelson-Siegel for years for which I do not have the same or a lower maturity bond
+                                # - Less of an issue for maturities that exceed my higest maturity because of the way the exponentials in Nelson-Siegel work
+                                # - When computing change in yield, drop very high interest rates and large changes as further check
+                                # - Note need to adjust which early maturities drop depending on strictness of shock i.e. with s1 can only compute 5+ year change in yield compared to with s5 can compute 1+ year change
+
+                                # don't worry about doing this for ycdi_for where I've already checked the appropriate bonds to include
+                                earliestmat = mats[0]
+                                if earliestmat > maturity:
+                                    continue
+                                latestmat = mats[-1]
+                                if latestmat < maturity:
+                                    continue
+
+                                # check to ensure not defining bad variables:}}}
+
+                                # note multiplying by 100 to return to percentage form
+                                befparams = outdict[outputprefix + '_i_p0'][i]
+                                aftparams = outdict[outputprefix + '_i_p1'][i]
+
+                                if pd.isnull(befparams) is not True and pd.isnull(aftparams) is not True:
+                                    befcurve = NelsonSiegelSvenssonCurve(befparams[0], befparams[1], befparams[2], befparams[3], befparams[4], befparams[5])
+                                    aftcurve = NelsonSiegelSvenssonCurve(aftparams[0], aftparams[1], aftparams[2], aftparams[3], aftparams[4], aftparams[5])
+                                    # before = nsme_yield(maturity, befparams) * 100
+                                    # after = nsme_yield(maturity, aftparams) * 100
+                                    before = befcurve(maturity) * 100
+                                    after = aftcurve(maturity) * 100
                                     di = after - before
 
                                 else:
