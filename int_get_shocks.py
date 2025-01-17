@@ -1154,7 +1154,7 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
 # Post-Processing Functions:{{{1
 def getaltnsmat(df, ycstem, maturity, includeoutsidevals = False):
     """
-    Take the parameters from the Nelson-Siegel approach and construct before/after/difference values for alternative maturities
+    Take the parameters from the Nelson-Siegel/Nelson-Siegel-Svensson approach and construct before/after/difference values for alternative maturities
 
     df is the dataframe
     ycstem is the first four parts i.e. yc_30m_ea_ns
@@ -1197,8 +1197,14 @@ def getaltnsmat(df, ycstem, maturity, includeoutsidevals = False):
         aftcurve = eval(aftcurve)
 
         # convert back into curves (rather than just parameters)
-        befcurve = NelsonSiegelCurve(befcurve[0], befcurve[1], befcurve[2], befcurve[3])
-        aftcurve = NelsonSiegelCurve(aftcurve[0], aftcurve[1], aftcurve[2], aftcurve[3])
+        if len(befcurve) == 4:
+            befcurve = NelsonSiegelCurve(befcurve[0], befcurve[1], befcurve[2], befcurve[3])
+            aftcurve = NelsonSiegelCurve(aftcurve[0], aftcurve[1], aftcurve[2], aftcurve[3])
+        elif len(befcurve) == 6:
+            befcurve = NelsonSiegelSvenssonCurve(befcurve[0], befcurve[1], befcurve[2], befcurve[3], befcurve[4], befcurve[5])
+            aftcurve = NelsonSiegelSvenssonCurve(aftcurve[0], aftcurve[1], aftcurve[2], aftcurve[3], aftcurve[4], aftcurve[5])
+        else:
+            raise ValueError('Some error')
 
         # get values for relevant maturities
         # note multiplying by 100 to return to percentage form
