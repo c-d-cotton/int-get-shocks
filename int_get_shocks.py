@@ -1186,15 +1186,17 @@ def getaltnsmat(df, ycstem, maturity, includeoutsidevals = False):
         earliestmat = earliestmats[i]
         latestmat = latestmats[i]
 
-        if pd.isnull(befcurve) or pd.isnull(aftcurve):
+        # evaluate curves to convert from string to list
+        if isinstance(befcurve, str):
+            befcurve = eval(befcurve)
+        if isinstance(aftcurve, str):
+            aftcurve = eval(aftcurve)
+
+        if (not isinstance(befcurve, list) and pd.isnull(befcurve)) or (not isinstance(aftcurve, list) and pd.isnull(aftcurve)):
             continue
         # drop maturity values which are outside the range of fixed income data I have available
         if  includeoutsidevals is False and (maturityval < earliestmat or maturityval > latestmat):
             continue
-
-        # evaluate curves to convert from string to list
-        befcurve = eval(befcurve)
-        aftcurve = eval(aftcurve)
 
         # convert back into curves (rather than just parameters)
         if len(befcurve) == 4:
