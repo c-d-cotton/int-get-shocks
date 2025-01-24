@@ -1243,9 +1243,11 @@ def getaltnsmat_varname(df, varnames, includeoutsidevals = False):
     return(df)
 
 
-def forwarddiff(df, prefix, start, end):
+def getforwardrate(df, prefix, start, end, components = None):
     """
     Returns the annual change in the forward part of the curve
+
+    Does for before/after/difference by default. To specify only 'd', components = ['d']
 
     Input:
     - dataset
@@ -1253,14 +1255,18 @@ def forwarddiff(df, prefix, start, end):
     - ycnamestart: y01 (for ns), y00y02 (for wi)
     - ycnameend: y11 (for ns), y07y13 (for wi)
     Output:
+    - yc_20m_ea_ns_f0_y01_y11 or yc_1h_ea_wi_f0_y00y02_y07y13
+    - yc_20m_ea_ns_f1_y01_y11 or yc_1h_ea_wi_f1_y00y02_y07y13
     - yc_20m_ea_ns_fd_y01_y11 or yc_1h_ea_wi_fd_y00y02_y07y13
 
     Structure of difference variable
-    ycdi__m1h_1h__fdi__YCNAME1__YCNAME2
+    ycdi__m1h_1h__fd__YCNAME1__YCNAME2
     prefix = 'ycdi__m1h_1h'
     ycnamestart = 'ridge__y01_y03'
     ycnameend = 'nslu__y05'
     """
+    if components is None:
+        components = ['0', '1', 'd']
 
     yctype = prefix.split('_')[3]
     if yctype not in ['ns', 'wi']:
@@ -1308,18 +1314,29 @@ def forwarddiff(df, prefix, start, end):
     else:
         raise ValueError('yctype misspecified: ' + yctype + '.')
 
-    if prefix + '_d_' + start not in df.columns:
-        raise ValueError('Missing: ' + prefix + '_d_' + start + '.')
-    if prefix + '_d_' + end not in df.columns:
-        raise ValueError('Missing: ' + prefix + '_d_' + end + '.')
-
-
-    df[prefix + '_fd_' + start + '_' + end] = (matend * df[prefix + '_d_' + end] - matstart * df[prefix + '_d_' + start]) / (matend - matstart)
+    if 'd' in components:
+        if prefix + '_d_' + start not in df.columns:
+            raise ValueError('Missing: ' + prefix + '_d_' + start + '.')
+        if prefix + '_d_' + end not in df.columns:
+            raise ValueError('Missing: ' + prefix + '_d_' + end + '.')
+        df[prefix + '_fd_' + start + '_' + end] = (matend * df[prefix + '_d_' + end] - matstart * df[prefix + '_d_' + start]) / (matend - matstart)
+    if '0' in components:
+        if prefix + '_0_' + start not in df.columns:
+            raise ValueError('Missing: ' + prefix + '_0_' + start + '.')
+        if prefix + '_0_' + end not in df.columns:
+            raise ValueError('Missing: ' + prefix + '_0_' + end + '.')
+        df[prefix + '_f0_' + start + '_' + end] = (matend * df[prefix + '_0_' + end] - matstart * df[prefix + '_0_' + start]) / (matend - matstart)
+    if '1' in components:
+        if prefix + '_1_' + start not in df.columns:
+            raise ValueError('Missing: ' + prefix + '_1_' + start + '.')
+        if prefix + '_1_' + end not in df.columns:
+            raise ValueError('Missing: ' + prefix + '_1_' + end + '.')
+        df[prefix + '_f1_' + start + '_' + end] = (matend * df[prefix + '_1_' + end] - matstart * df[prefix + '_1_' + start]) / (matend - matstart)
     
     return(df)
 
 
-def forwarddiff_varname(df, varnames):
+def getforwardrate_varname(df, varnames):
     if isinstance(varnames, str):
         varnames = [varnames]
 
@@ -1327,11 +1344,12 @@ def forwarddiff_varname(df, varnames):
         if varname in df:
             continue
         prefix = '_'.join(varname.split('_')[0: 4])
-        if varname.split('_')[4] != 'fd':
-            raise ValueError('Fifth part of varname should be fd for forwarddif_varname.')
+        component = varname.split('_')[4]
+        if component not in ['0', '1', 'fd']:
+            raise ValueError('Fifth part of varname should be "0"/"1"/"fd" for forwarddif_varname.')
         ycnamestart = varname.split('_')[5]
         ycnameend = varname.split('_')[6]
-        df = forwarddiff(df, prefix, ycnamestart, ycnameend)
+        df = getforwardrate(df, prefix, ycnamestart, ycnameend, components = [component])
 
     return(df)
 
