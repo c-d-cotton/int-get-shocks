@@ -1344,9 +1344,10 @@ def getforwardrate_varname(df, varnames):
         if varname in df:
             continue
         prefix = '_'.join(varname.split('_')[0: 4])
-        component = varname.split('_')[4]
-        if component not in ['0', '1', 'fd']:
+        fcomponent = varname.split('_')[4]
+        if fcomponent not in ['f0', 'f1', 'fd']:
             raise ValueError('Fifth part of varname should be "0"/"1"/"fd" for forwarddif_varname.')
+        component = fcomponent[1: ]
         ycnamestart = varname.split('_')[5]
         ycnameend = varname.split('_')[6]
         df = getforwardrate(df, prefix, ycnamestart, ycnameend, components = [component])
