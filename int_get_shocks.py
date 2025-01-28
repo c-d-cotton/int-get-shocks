@@ -1279,10 +1279,10 @@ def getforwardrate(df, prefix, start, end, components = None):
         if len(end) != 6:
             raise ValueError('For wi, end should have 6 letters: ' + end + '.')
     elif yctype == 'ns':
-        if len(start) != 3:
-            raise ValueError('For ns, start should have 6 letters: ' + start + '.')
-        if len(end) != 3:
-            raise ValueError('For wi, end should have 3 letters: ' + end + '.')
+        if len(start) not in [3, 4]:
+            raise ValueError('For ns, start should have 3/4 letters: ' + start + '.')
+        if len(end) not in [3, 4]:
+            raise ValueError('For wi, end should have 3/4 letters: ' + end + '.')
     else:
         raise ValueError('yctype misspecified: ' + yctype + '.')
 
