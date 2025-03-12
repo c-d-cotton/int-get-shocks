@@ -917,12 +917,54 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
 
                                 if abs(befparamdict['beta1']) <= 100 and abs(aftparamdict['beta1']) <=100:
                                     success = True
+                            
+                            if success is True:
+                                befparams = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
+                                aftparams = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
+
+                            # basic check of different rates:{{{
+                            # want to verify that NS doesn't vary wildly across different maturities
+                            # cases where this can happen:
+                            # 1. if have a very low maturity (e.g. d07/m01) value but then a gap up to the next maturity, Nelson-Siegel can fit the gap poorly
+                            # in this case set success to be False
+                            if success is True:
+                                # get basic maturities to test
+                                matstestbasic = list(np.arange(0.1, 1, 0.1)) + list(np.arange(1, 10, 0.5)) + list(np.arange(10, 30, 2))
+                                # limit maturities to test to only those between mats[0] and mats[1]
+                                # and make sure to include mats[0]
+                                matstest = [mats[0]] + [val for val in matstestbasic if val >= mats[0] and val <= mats[-1]]
+
+                                # get difference from before to after for each valtest
+                                diffs = []
+                                for maturity in matstest:
+                                    before = nsme_yield(maturity, befparams) * 100
+                                    after = nsme_yield(maturity, aftparams) * 100
+                                    # before = befcurve(maturity) * 100
+                                    # after = aftcurve(maturity) * 100
+                                    di = after - before
+                                    diffs.append(di)
+
+                                # get minimum difference to trigger success = False
+                                mindiffs = [abs(diffs[0]) * 3, abs(np.mean(diffs)) * 3, 0.3]
+                                matlt10 = [i for i in range(len(matstest)) if matstest[i] <= 10]
+                                if len(matlt10) > 10:
+                                    meanlt10 = abs(np.mean([diffs[i] for i in matlt10])) * 3
+                                    mindiffs.append(meanlt10)
+                                maxmindiff = max(mindiffs)
+
+                                # set success to be False if any of the diffs meet the mindiff
+                                baddiffs = [diff for diff in diffs if abs(diff) > maxmindiff]
+                                if len(baddiffs) > 0:
+                                    success = False
+                                    
+                            # basic check of different rates:}}}
 
                             if success is True:
                                 # add params
-                                outdict[outputprefix + '_i_p0'][i] = [befparamdict['beta0'], befparamdict['beta1'], befparamdict['beta2'], befparamdict['tau']]
-                                outdict[outputprefix + '_i_p1'][i] = [aftparamdict['beta0'], aftparamdict['beta1'], aftparamdict['beta2'], aftparamdict['tau']]
+                                outdict[outputprefix + '_i_p0'][i] = befparams
+                                outdict[outputprefix + '_i_p1'][i] = aftparams
 
+                                # get maturity over which I can compute Nelson-Siegel well
                                 # add first/last maturity values
                                 outdict[outputprefix + '_i_me'][i] = mats[0]
                                 outdict[outputprefix + '_i_ml'][i] = mats[-1]
@@ -1007,15 +1049,13 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 names2 = [names[j] for j in keepjs]
                                 sources2 = [sources[j] for j in keepjs]
 
-                                if len(befrates2) == 0:
-                                    continue
+                                if len(befrates2) > 0:
 
-                                # stop if no values
-                                # before/after computation
-                                # take mean in case multiple sources
-                                before = np.mean(befrates2)
-                                after = np.mean(aftrates2)
-                                di = after - before
+                                    # stop if no values
+                                    # before/after computation
+                                    # take mean in case multiple sources
+                                    outdict[outputprefix + '_0_' + name2][i] = np.mean(befrates2)
+                                    outdict[outputprefix + '_1_' + name2][i] = np.mean(aftrates2)
 
                             elif thisdict['yctype'] in nspossibleval:
                                 
@@ -1031,10 +1071,10 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 # - Note need to adjust which early maturities drop depending on strictness of shock i.e. with s1 can only compute 5+ year change in yield compared to with s5 can compute 1+ year change
 
                                 # don't worry about doing this for ycdi_for where I've already checked the appropriate bonds to include
-                                earliestmat = mats[0]
+                                earliestmat = outdict[outputprefix + '_i_me'][i]
                                 if earliestmat > maturity:
                                     continue
-                                latestmat = mats[-1]
+                                latestmat = outdict[outputprefix + '_i_ml'][i]
                                 if latestmat < maturity:
                                     continue
 
@@ -1045,11 +1085,8 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 aftparams = outdict[outputprefix + '_i_p1'][i]
 
                                 if pd.isnull(befparams) is not True and pd.isnull(aftparams) is not True:
-                                    before = nsme_yield(maturity, befparams) * 100
-                                    after = nsme_yield(maturity, aftparams) * 100
-                                    # before = befcurve(maturity) * 100
-                                    # after = aftcurve(maturity) * 100
-                                    di = after - before
+                                    outdict[outputprefix + '_0_' + name2][i] = nsme_yield(maturity, befparams) * 100
+                                    outdict[outputprefix + '_1_' + name2][i] = nsme_yield(maturity, aftparams) * 100
 
                             elif thisdict['yctype'] in nsspossibleval:
                                 
@@ -1065,10 +1102,10 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 # - Note need to adjust which early maturities drop depending on strictness of shock i.e. with s1 can only compute 5+ year change in yield compared to with s5 can compute 1+ year change
 
                                 # don't worry about doing this for ycdi_for where I've already checked the appropriate bonds to include
-                                earliestmat = mats[0]
+                                earliestmat = outdict[outputprefix + '_i_me'][i]
                                 if earliestmat > maturity:
                                     continue
-                                latestmat = mats[-1]
+                                latestmat = outdict[outputprefix + '_i_ml'][i]
                                 if latestmat < maturity:
                                     continue
 
@@ -1081,16 +1118,8 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 if pd.isnull(befparams) is not True and pd.isnull(aftparams) is not True:
                                     befcurve = NelsonSiegelSvenssonCurve(befparams[0], befparams[1], befparams[2], befparams[3], befparams[4], befparams[5])
                                     aftcurve = NelsonSiegelSvenssonCurve(aftparams[0], aftparams[1], aftparams[2], aftparams[3], aftparams[4], aftparams[5])
-                                    # before = nsme_yield(maturity, befparams) * 100
-                                    # after = nsme_yield(maturity, aftparams) * 100
-                                    before = befcurve(maturity) * 100
-                                    after = aftcurve(maturity) * 100
-                                    di = after - before
-
-                                else:
-                                    before = np.nan
-                                    after = np.nan
-                                    di = np.nan
+                                    outdict[outputprefix + '_0_' + name2][i] = befcurve(maturity) * 100
+                                    outdict[outputprefix + '_1_' + name2][i] = aftcurve(maturity) * 100
 
                             elif thisdict['yctype'] == 'wi':
                                 if '_' in name:
@@ -1114,31 +1143,27 @@ def getbondshocks_yc(dfprocessed, inputlist, printdetails = False):
                                 names2 = [names[j] for j in keepjs]
                                 sources2 = [sources[j] for j in keepjs]
 
-                                if len(befrates2) == 0:
-                                    continue
+                                if len(befrates2) > 0:
 
-                                # stop if no values
-                                # before/after computation
-                                # take mean in case multiple sources
-                                before = np.mean(befrates2)
-                                after = np.mean(aftrates2)
-                                di = after - before
+                                    # before/after computation
+                                    # take mean in case multiple sources
+                                    outdict[outputprefix + '_0_' + name2][i] = np.mean(befrates2)
+                                    outdict[outputprefix + '_1_' + name2][i] = np.mean(aftrates2)
 
                             else:
                                 raise ValueError('yctype not defined correctly: ' + thisdict['yctype'] + '.')
 
-                            # add to lists
-                            outdict[outputprefix + '_0_' + name2][i] = before
-                            outdict[outputprefix + '_1_' + name2][i] = after
-                            outdict[outputprefix + '_d_' + name2][i] = di
+                            # add difference
+                            outdict[outputprefix + '_d_' + name2][i] = outdict[outputprefix + '_1_' + name2][i] - outdict[outputprefix + '_0_' + name2][i]
 
                             if thisdict['yctype'] in ['na', 'wi'] and thisdict['addinfovars'] is True:
-                                outdict[outputprefix + '_i_r0_' + name2][i] = befrates2
-                                outdict[outputprefix + '_i_r1_' + name2][i] = aftrates2
-                                outdict[outputprefix + '_i_i_' + name2][i] = ids2
-                                outdict[outputprefix + '_i_m_' + name2][i] = mats2
-                                outdict[outputprefix + '_i_n_' + name2][i] = names2
-                                outdict[outputprefix + '_i_s_' + name2][i] = sources2
+                                if len(befrates2) > 0:
+                                    outdict[outputprefix + '_i_r0_' + name2][i] = befrates2
+                                    outdict[outputprefix + '_i_r1_' + name2][i] = aftrates2
+                                    outdict[outputprefix + '_i_i_' + name2][i] = ids2
+                                    outdict[outputprefix + '_i_m_' + name2][i] = mats2
+                                    outdict[outputprefix + '_i_n_' + name2][i] = names2
+                                    outdict[outputprefix + '_i_s_' + name2][i] = sources2
 
     # combine into dataframe
     dfout = pd.DataFrame(outdict, dfprocessed.index)
