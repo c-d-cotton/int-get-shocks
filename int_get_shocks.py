@@ -93,14 +93,14 @@ shockdict_intra_basic = {}
 shockdict_intra_basic["2h"] = ["m1h", "1h"]
 shockdict_intra_basic["30m"] = ["m10m", "20m"]
 
-shockdict_intra_extended = {}
+shockdict_intra_extended = copy.deepcopy(shockdict_intra_basic)
 shockdict_intra_extended["1h"] = ["m30m", "30m"]
 # shockdict_intra_extended["12h"] = ["m2h", "12h"]
 shockdict_intra_extended["24h"] = ["m1h", "24h"]
 # shockdict_intra_extended["48h"] = ["m2h", "48h"]
 # shockdict_intra_extended["72h"] = ["m2h", "72h"]
 # shockdict_intra_extended["96h"] = ["m2h", "96h"]
-shockdict_intra_extended["168h"] = ["m1h", "168h"]
+# shockdict_intra_extended["168h"] = ["m1h", "168h"]
 
 # Auxilliary Functions:{{{1
 def processdates(dates, zonestodo, zonesavailable):
