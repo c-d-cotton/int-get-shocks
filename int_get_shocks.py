@@ -315,12 +315,12 @@ def getbondshocks_process(df):
                 # note that sometimes mats[i][j] can be null
                 # for example AUS non-benchmark bond AU3TB0000143 issued on 20120625d but appears in data on 20120619d
                 if pd.notnull(befrates[i][j]) and pd.notnull(aftrates[i][j]) and pd.notnull(mats[i][j]) and isinstance(befrates[i][j], str) is False and isinstance(aftrates[i][j], str) is False:
-                    befrates_out[i] = befrates_out[i] + [befrates[i][j]]
-                    aftrates_out[i] = aftrates_out[i] + [aftrates[i][j]]
-                    ids_out[i] = ids_out[i] + [ids[i][j]]
-                    mats_out[i] = mats_out[i] + [mats[i][j]]
-                    names_out[i] = names_out[i] + [names[i][j]]
-                    sources_out[i] = sources_out[i] + [prefix_source]
+                    befrates_out[i].append(befrates[i][j])
+                    aftrates_out[i].append(aftrates[i][j])
+                    ids_out[i].append(ids[i][j])
+                    mats_out[i].append(mats[i][j])
+                    names_out[i].append(names[i][j])
+                    sources_out[i].append(prefix_source)
 
         dfout['iout__' + prefix_nonsource + '__befrate'] = befrates_out
         dfout['iout__' + prefix_nonsource + '__aftrate'] = aftrates_out
@@ -331,7 +331,9 @@ def getbondshocks_process(df):
         
     # merge columns together to get iout:}}}
 
-    prefix_nonsources = ['__'.join(col.split('__')[1: -1]) for col in dfout.columns]
+    # get list of prefixes excluding iout__ at start and __befrate/__aftrate etc. at end
+    prefix_nonsources = sorted(list(set(['__'.join(col.split('__')[1: -1]) for col in dfout.columns])))
+
     # basic checks and reorder iout:{{{
     for prefix_nonsource in prefix_nonsources:
         befrates = list(dfout['iout__' + prefix_nonsource + '__befrate'])
@@ -435,8 +437,8 @@ def getbondshocks_process(df):
                         else:
                             isoutlier = False
                     else:
-                        comparisonlevel = np.median([befrates[i][k] for k in comparisonks])
-                        comparisonchange = np.median([aftrates[i][k] - befrates[i][k] for k in comparisonks])
+                        comparisonlevel = np.mean([befrates[i][k] for k in comparisonks])
+                        comparisonchange = np.mean([aftrates[i][k] - befrates[i][k] for k in comparisonks])
 
                         # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
                         if abs( 1/(1+thislevel/100) - 1/(1+comparisonlevel/100) ) > 0.05:
