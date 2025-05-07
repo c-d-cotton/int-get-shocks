@@ -437,8 +437,8 @@ def getbondshocks_process(df):
                         else:
                             isoutlier = False
                     else:
-                        comparisonlevel = np.mean([befrates[i][k] for k in comparisonks])
-                        comparisonchange = np.mean([aftrates[i][k] - befrates[i][k] for k in comparisonks])
+                        comparisonlevel = np.median([befrates[i][k] for k in comparisonks])
+                        comparisonchange = np.median([aftrates[i][k] - befrates[i][k] for k in comparisonks])
 
                         # now remove outliers by comparing level to comparison level, change to comparison change, and general size of change
                         if abs( 1/(1+thislevel/100) - 1/(1+comparisonlevel/100) ) > 0.05:
